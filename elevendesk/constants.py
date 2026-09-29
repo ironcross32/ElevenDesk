@@ -56,6 +56,9 @@ KEY_MODEL = "model"
 KEY_CAN_DO_TTS = "can_do_tts"
 KEY_CAN_DO_STS = "can_do_sts"
 KEY_PREVIEW = "preview"
+KEY_PREVIEW_URL = "preview_url"
+KEY_DETAILS = "details"
+KEY_PUBLIC_OWNER_ID = "public_owner_id"
 KEY_HISTORY_ITEM_ID = "history_item_id"
 KEY_AUDIO = "audio"
 KEY_FILE_PATH = "file_path"
@@ -155,6 +158,65 @@ LABEL_CANCEL = "Cancel"
 LABEL_CLOSE = "Close"
 LABEL_AUDIO_FILES = "Audio files"
 LABEL_CONVERT = "Convert"
+LABEL_SHOW = "Show"
+LABEL_GENDER = "Gender"
+LABEL_AGE = "Age"
+LABEL_LANGUAGE = "Language"
+LABEL_SORT = "Sort by"
+LABEL_PREVIEW = "Preview"
+LABEL_STOP = "Stop"
+LABEL_LOAD_MORE = "Load More"
+LABEL_ADD_TO_MY_VOICES = "Add to My Voices"
+NAME_SEARCH_COMMUNITY = "Search, press Enter to search"
+NAME_PREVIEW_VOICE = "Preview selected voice, or press Enter on a voice"
+NAME_STOP_PREVIEW = "Stop preview"
+NAME_LOAD_MORE_VOICES = "Load more voices"
+VOICE_SOURCE_MY_VOICES = "My Voices"
+VOICE_SOURCE_COMMUNITY = "Community Library"
+VOICE_SOURCES = (
+	VOICE_SOURCE_MY_VOICES,
+	VOICE_SOURCE_COMMUNITY,
+)
+FILTER_ANY = "Any"
+GENDER_FILTERS = (
+	(FILTER_ANY, EMPTY_TEXT),
+	("Female", "female"),
+	("Male", "male"),
+	("Neutral", "neutral"),
+)
+AGE_FILTERS = (
+	(FILTER_ANY, EMPTY_TEXT),
+	("Young", "young"),
+	("Middle aged", "middle_aged"),
+	("Old", "old"),
+)
+LANGUAGE_FILTERS = (
+	(FILTER_ANY, EMPTY_TEXT),
+	("Arabic", "ar"),
+	("Chinese", "zh"),
+	("Dutch", "nl"),
+	("English", "en"),
+	("French", "fr"),
+	("German", "de"),
+	("Hindi", "hi"),
+	("Indonesian", "id"),
+	("Italian", "it"),
+	("Japanese", "ja"),
+	("Korean", "ko"),
+	("Polish", "pl"),
+	("Portuguese", "pt"),
+	("Russian", "ru"),
+	("Spanish", "es"),
+	("Swedish", "sv"),
+	("Turkish", "tr"),
+	("Ukrainian", "uk"),
+)
+SORT_FILTERS = (
+	("Trending", "trending"),
+	("Most used", "usage_character_count_1y"),
+	("Most cloned", "cloned_by_count"),
+	("Newest", "created_date"),
+)
 
 MENU_FILE = "&File"
 MENU_TOOLS = "&Tools"
@@ -202,6 +264,7 @@ COLUMN_SAMPLE_RATE = "Sample Rate"
 COLUMN_CHANNELS = "Channels"
 COLUMN_SIZE = "Size"
 COLUMN_PATH = "Path"
+COLUMN_DETAILS = "Details"
 
 STATUS_CONVERTING = "Converting audio..."
 STATUS_CONVERTED = "Audio converted."
@@ -226,6 +289,12 @@ STATUS_SAVED = "Saved: "
 STATUS_COPIED = "Transcript copied."
 STATUS_VOICES_REFRESHED = "Voice list refreshed."
 STATUS_LOADING = "Loading..."
+STATUS_VOICES_LOADED_TEMPLATE = "Voices: {0}."
+STATUS_MORE_VOICES_TEMPLATE = "Voices: {0}. More are available with Load More."
+STATUS_LOADING_PREVIEW = "Loading preview..."
+STATUS_PLAYING_PREVIEW_TEMPLATE = "Playing preview of {0}."
+STATUS_PREVIEW_STOPPED = "Preview stopped."
+STATUS_ADDING_VOICE_TEMPLATE = "Adding {0} to My Voices..."
 STATUS_AUDIO_FILES_ADDED_TEMPLATE = "Added {0} audio files; skipped {1} unreadable files."
 STATUS_AUDIO_FILES_LIMIT_TEMPLATE = "Added {0} audio files; skipped {1} unreadable files; {2} files were not added because the maximum is {3}."
 
@@ -253,10 +322,14 @@ ERROR_AUDIO_METADATA = "Audio metadata could not be read."
 ERROR_SDK_RESPONSE = "The ElevenLabs SDK returned an unexpected response."
 ERROR_API_REQUEST_ID_TEMPLATE = "{0} Request ID: {1}"
 ERROR_DELETE_HISTORY = "The history item could not be deleted."
+ERROR_NO_PREVIEW = "This voice has no preview."
 
 ABOUT_TEXT_TEMPLATE = "{0} version {1}\nAccessible desktop client for ElevenLabs."
 VOICE_RESULT_TEMPLATE = "Name: {0}\nVoice ID: {1}"
 VOICE_CHOICE_TEMPLATE = "{0} ({1})"
+DETAILS_SEPARATOR = ", "
+VOICE_ALREADY_ADDED = "in My Voices"
+LABEL_WORD_SEPARATOR = "_"
 SLIDER_VALUE_TEMPLATE = "{0}: {1}"
 SPEED_VALUE_TEMPLATE = "{0}: {1:.2f}"
 SUCCESS_CLONE_TEMPLATE = "Voice cloned.\nVoice ID: {0}"
@@ -332,6 +405,17 @@ API_ATTR_TYPE = "source"
 API_ATTR_VOICE_NAME = "voice_name"
 API_ATTR_TEXT = "text"
 API_ATTR_HISTORY_ITEM_ID = "history_item_id"
+API_ATTR_GET_SHARED = "get_shared"
+API_ATTR_SHARE = "share"
+API_ATTR_PREVIEW_URL = "preview_url"
+API_ATTR_PUBLIC_OWNER_ID = "public_owner_id"
+API_ATTR_HAS_MORE = "has_more"
+API_ATTR_LABELS = "labels"
+API_ATTR_GENDER = "gender"
+API_ATTR_AGE = "age"
+API_ATTR_ACCENT = "accent"
+API_ATTR_LANGUAGE = "language"
+API_ATTR_IS_ADDED_BY_USER = "is_added_by_user"
 API_ERROR_DETAIL = "detail"
 API_ERROR_MESSAGE = "message"
 API_ERROR_REQUEST_ID = "request_id"
@@ -356,6 +440,14 @@ API_KW_FILES = "files"
 API_KW_PAGE_SIZE = "page_size"
 API_KW_VOICE_PREVIEW_ID = "voice_preview_id"
 API_KW_HISTORY_ITEM_ID = "history_item_id"
+API_KW_SEARCH = "search"
+API_KW_GENDER = "gender"
+API_KW_AGE = "age"
+API_KW_LANGUAGE = "language"
+API_KW_SORT = "sort"
+API_KW_PAGE = "page"
+API_KW_PUBLIC_USER_ID = "public_user_id"
+API_KW_NEW_NAME = "new_name"
 API_KEY_SIMILARITY_BOOST = "similarity_boost"
 API_KEY_STABILITY = "stability"
 API_KEY_STYLE = "style"
@@ -408,6 +500,7 @@ COLUMN_WIDTH_SAMPLE_RATE = 110
 COLUMN_WIDTH_CHANNELS = 90
 COLUMN_WIDTH_SIZE = 100
 COLUMN_WIDTH_PATH = 360
+COLUMN_WIDTH_DETAILS = 220
 SLIDER_MINIMUM = 0
 SLIDER_MAXIMUM = 100
 SLIDER_DEFAULT_STABILITY = 50
@@ -428,6 +521,9 @@ PROGRESS_COMPLETE = 100
 PROGRESS_PULSE_INTERVAL_MS = 120
 PREVIEW_MAX_LENGTH = 80
 HISTORY_PAGE_SIZE = 100
+SHARED_VOICES_PAGE_SIZE = 50
+PREVIEW_DOWNLOAD_TIMEOUT_SECONDS = 30.0
+PREVIEW_OUTPUT_FORMAT = OUTPUT_MP3_44100_128
 CLONE_MAX_AUDIO_FILES = 25
 HISTORY_DATE_PREFIX_FORMAT = "%A, %B"
 HISTORY_DATE_TEMPLATE = "{0} {1}, {2}"

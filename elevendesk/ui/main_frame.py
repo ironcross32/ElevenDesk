@@ -128,7 +128,7 @@ class MainFrame(wx.Frame):
 		self.Close()
 
 	def _on_voice_library(self, event):
-		self._show_non_modal_dialog(VoiceLibraryDialog(self, self.tts_panel))
+		self._show_non_modal_dialog(VoiceLibraryDialog(self, self.tts_panel, self.sts_panel))
 
 	def _on_clone_voice(self, event):
 		dialog = CloneVoiceDialog(self)

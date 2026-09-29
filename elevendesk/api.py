@@ -107,6 +107,27 @@ def _get_sdk_method(client, section_name, method_name):
 		raise ElevenDeskAPIError(constants.ERROR_SDK_RESPONSE) from error
 
 
+_LANGUAGE_NAMES = {code: name for name, code in constants.LANGUAGE_FILTERS if code}
+
+
+def _format_voice_details(source, extra_details=()):
+	# Gender, age, accent and language read as one comma-separated column, such as "female, middle aged, british".
+	details = []
+	for attribute_name in (
+		constants.API_ATTR_GENDER,
+		constants.API_ATTR_AGE,
+		constants.API_ATTR_ACCENT,
+		constants.API_ATTR_LANGUAGE,
+	):
+		value = _get_attribute(source, attribute_name, constants.EMPTY_TEXT)
+		if attribute_name == constants.API_ATTR_LANGUAGE:
+			value = _LANGUAGE_NAMES.get(value, value)
+		if value:
+			details.append(str(value).replace(constants.LABEL_WORD_SEPARATOR, constants.SPACE))
+	details.extend(extra_details)
+	return constants.DETAILS_SEPARATOR.join(details)
+
+
 def get_voices():
 	client = get_client()
 	response = _call_sdk(
@@ -122,8 +143,75 @@ def get_voices():
 			constants.KEY_NAME: _get_attribute(voice, constants.API_ATTR_NAME, constants.EMPTY_TEXT),
 			constants.KEY_CATEGORY: _get_attribute(voice, constants.API_ATTR_CATEGORY, constants.EMPTY_TEXT) or constants.EMPTY_TEXT,
 			constants.KEY_DESCRIPTION: _get_attribute(voice, constants.API_ATTR_DESCRIPTION, constants.EMPTY_TEXT) or constants.EMPTY_TEXT,
+			constants.KEY_DETAILS: _format_voice_details(_get_attribute(voice, constants.API_ATTR_LABELS, None) or {}),
+			constants.KEY_PREVIEW_URL: _get_attribute(voice, constants.API_ATTR_PREVIEW_URL, constants.EMPTY_TEXT) or constants.EMPTY_TEXT,
 		})
 	return voices
+
+
+def get_shared_voices(search, gender, age, language, sort, page):
+	client = get_client()
+	keyword_arguments = {
+		constants.API_KW_PAGE_SIZE: constants.SHARED_VOICES_PAGE_SIZE,
+		constants.API_KW_PAGE: page,
+		constants.API_KW_SORT: sort,
+	}
+	# Empty filters are left out so the API does not treat them as "match nothing".
+	for keyword, value in (
+		(constants.API_KW_SEARCH, search),
+		(constants.API_KW_GENDER, gender),
+		(constants.API_KW_AGE, age),
+		(constants.API_KW_LANGUAGE, language),
+	):
+		if value:
+			keyword_arguments[keyword] = value
+	response = _call_sdk(
+		_get_sdk_method(client, constants.API_ATTR_VOICES, constants.API_ATTR_GET_SHARED),
+		keyword_arguments,
+	)
+	voices = []
+	for voice in _get_collection(response, constants.API_ATTR_VOICES):
+		voice_id = _get_attribute(voice, constants.API_ATTR_VOICE_ID, constants.EMPTY_TEXT)
+		extra_details = (constants.VOICE_ALREADY_ADDED,) if _get_attribute(voice, constants.API_ATTR_IS_ADDED_BY_USER, False) else ()
+		voices.append({
+			constants.KEY_ID: voice_id,
+			constants.KEY_VOICE_ID: voice_id,
+			constants.KEY_PUBLIC_OWNER_ID: _get_attribute(voice, constants.API_ATTR_PUBLIC_OWNER_ID, constants.EMPTY_TEXT),
+			constants.KEY_NAME: _get_attribute(voice, constants.API_ATTR_NAME, constants.EMPTY_TEXT),
+			constants.KEY_CATEGORY: str(_get_attribute(voice, constants.API_ATTR_CATEGORY, constants.EMPTY_TEXT) or constants.EMPTY_TEXT),
+			constants.KEY_DESCRIPTION: _get_attribute(voice, constants.API_ATTR_DESCRIPTION, constants.EMPTY_TEXT) or constants.EMPTY_TEXT,
+			constants.KEY_DETAILS: _format_voice_details(voice, extra_details),
+			constants.KEY_PREVIEW_URL: _get_attribute(voice, constants.API_ATTR_PREVIEW_URL, constants.EMPTY_TEXT) or constants.EMPTY_TEXT,
+		})
+	has_more = bool(_get_attribute(response, constants.API_ATTR_HAS_MORE, False))
+	return voices, has_more
+
+
+def add_shared_voice(public_owner_id, voice_id, name):
+	client = get_client()
+	response = _call_sdk(
+		_get_sdk_method(client, constants.API_ATTR_VOICES, constants.API_ATTR_SHARE),
+		{
+			constants.API_KW_PUBLIC_USER_ID: public_owner_id,
+			constants.API_KW_VOICE_ID: voice_id,
+			constants.API_KW_NEW_NAME: name,
+		},
+	)
+	return _get_attribute(response, constants.API_ATTR_VOICE_ID, constants.EMPTY_TEXT) or voice_id
+
+
+def get_voice_preview(preview_url):
+	# Preview samples are public files, so they are downloaded directly rather than through the SDK.
+	try:
+		response = httpx.get(
+			preview_url,
+			timeout=constants.PREVIEW_DOWNLOAD_TIMEOUT_SECONDS,
+			follow_redirects=True,
+		)
+		response.raise_for_status()
+	except httpx.HTTPError as error:
+		raise ElevenDeskAPIError(str(error)) from error
+	return response.content
 
 
 def get_models():
