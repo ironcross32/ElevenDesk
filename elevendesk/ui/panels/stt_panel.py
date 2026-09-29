@@ -6,6 +6,7 @@ from elevendesk import api
 from elevendesk import config
 from elevendesk import constants
 from elevendesk.ui import choices
+from elevendesk.ui.status_text import StatusText
 
 
 class SpeechToTextPanel(wx.Panel):
@@ -61,7 +62,7 @@ class SpeechToTextPanel(wx.Panel):
 		)
 		self.copy_button.Disable()
 		self.save_button.Disable()
-		self.status_text = wx.StaticText(self, label=constants.STATUS_READY, name=constants.LABEL_STATUS)
+		self.status_text = StatusText(self, constants.STATUS_READY, constants.LABEL_STATUS)
 
 	def _layout_controls(self):
 		main_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -128,7 +129,7 @@ class SpeechToTextPanel(wx.Panel):
 
 	def _on_transcribe(self, event):
 		if not self.selected_file_path:
-			self.status_text.SetLabel(constants.ERROR_AUDIO_REQUIRED)
+			self.status_text.ReportFailure(constants.ERROR_AUDIO_REQUIRED)
 			return
 		model_id = choices.get_selected_model_id(self.model_combo, self.models)
 		self._save_model_id(model_id)
@@ -142,7 +143,7 @@ class SpeechToTextPanel(wx.Panel):
 		try:
 			config.save_config(settings)
 		except OSError as error:
-			self.status_text.SetLabel(str(error))
+			self.status_text.ReportFailure(str(error))
 
 	def _transcribe_worker(self, model_id):
 		try:
@@ -163,11 +164,11 @@ class SpeechToTextPanel(wx.Panel):
 
 	def _transcription_failed(self, message):
 		self.transcribe_button.Enable()
-		self.status_text.SetLabel(message)
+		self.status_text.ReportFailure(message)
 
 	def _on_copy(self, event):
 		if not wx.TheClipboard.Open():
-			self.status_text.SetLabel(constants.ERROR_CLIPBOARD)
+			self.status_text.ReportFailure(constants.ERROR_CLIPBOARD)
 			return
 		try:
 			wx.TheClipboard.SetData(wx.TextDataObject(self.transcript_output.GetValue()))
@@ -192,6 +193,6 @@ class SpeechToTextPanel(wx.Panel):
 			with open(file_path, constants.FILE_MODE_TEXT_WRITE, encoding=constants.TEXT_ENCODING) as transcript_file:
 				transcript_file.write(self.transcript_output.GetValue())
 		except OSError as error:
-			self.status_text.SetLabel(str(error))
+			self.status_text.ReportFailure(str(error))
 			return
 		self.status_text.SetLabel(constants.STATUS_SAVED + file_path)

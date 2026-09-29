@@ -7,6 +7,7 @@ from elevendesk import config
 from elevendesk import constants
 from elevendesk import playback
 from elevendesk.ui import choices
+from elevendesk.ui.status_text import StatusText
 
 
 class TextToSpeechPanel(wx.Panel):
@@ -82,7 +83,7 @@ class TextToSpeechPanel(wx.Panel):
 		self.save_button = wx.Button(self, label=constants.LABEL_SAVE, name=constants.NAME_SAVE_GENERATED_SPEECH)
 		self.play_button.Disable()
 		self.save_button.Disable()
-		self.status_text = wx.StaticText(self, label=constants.STATUS_READY, name=constants.LABEL_STATUS)
+		self.status_text = StatusText(self, constants.STATUS_READY, constants.LABEL_STATUS)
 
 	def _create_slider(self, label, minimum, maximum, value):
 		slider_label = wx.StaticText(self, label=label)
@@ -226,7 +227,7 @@ class TextToSpeechPanel(wx.Panel):
 		self.status_text.SetLabel(constants.STATUS_READY)
 
 	def _show_voice_error(self, message):
-		self.status_text.SetLabel(message)
+		self.status_text.ReportFailure(message)
 
 	def select_voice_by_id(self, voice_id):
 		for index, voice in enumerate(self.voices):
@@ -247,7 +248,7 @@ class TextToSpeechPanel(wx.Panel):
 		try:
 			config.save_config(settings)
 		except OSError as error:
-			self.status_text.SetLabel(str(error))
+			self.status_text.ReportFailure(str(error))
 
 	def _on_generate(self, event):
 		self._start_generation()
@@ -264,10 +265,10 @@ class TextToSpeechPanel(wx.Panel):
 		text = self.text_input.GetValue().strip()
 		voice_index = self.voice_combo.GetSelection()
 		if not text:
-			self.status_text.SetLabel(constants.ERROR_TEXT_REQUIRED)
+			self.status_text.ReportFailure(constants.ERROR_TEXT_REQUIRED)
 			return
 		if voice_index == wx.NOT_FOUND:
-			self.status_text.SetLabel(constants.ERROR_VOICE_REQUIRED)
+			self.status_text.ReportFailure(constants.ERROR_VOICE_REQUIRED)
 			return
 		voice_id = self.voices[voice_index][constants.KEY_VOICE_ID]
 		self._save_voice_id(voice_id)
@@ -306,7 +307,7 @@ class TextToSpeechPanel(wx.Panel):
 
 	def _generation_failed(self, message):
 		self.generate_button.Enable()
-		self.status_text.SetLabel(message)
+		self.status_text.ReportFailure(message)
 
 	def _on_play(self, event):
 		if self.last_audio:
@@ -341,7 +342,7 @@ class TextToSpeechPanel(wx.Panel):
 			with open(file_path, constants.FILE_MODE_BINARY_WRITE) as output_file:
 				output_file.write(self.last_audio)
 		except OSError as error:
-			self.status_text.SetLabel(str(error))
+			self.status_text.ReportFailure(str(error))
 			return False
 		self.status_text.SetLabel(constants.STATUS_SAVED + file_path)
 		return True

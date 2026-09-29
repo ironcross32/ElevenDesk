@@ -8,6 +8,7 @@ from sound_lib.main import BassError
 from elevendesk import api
 from elevendesk import constants
 from elevendesk import playback
+from elevendesk.ui.status_text import StatusText
 
 
 class CloneVoiceDialog(wx.Dialog):
@@ -60,7 +61,7 @@ class CloneVoiceDialog(wx.Dialog):
 		)
 		self.progress_gauge.Hide()
 		self.progress_label.Hide()
-		self.status_text = wx.StaticText(self, label=constants.STATUS_READY, name=constants.LABEL_STATUS)
+		self.status_text = StatusText(self, constants.STATUS_READY, constants.LABEL_STATUS)
 		self.progress_timer = wx.Timer(self)
 		self._layout_controls()
 		self.add_button.Bind(wx.EVT_BUTTON, self._on_add)
@@ -193,18 +194,18 @@ class CloneVoiceDialog(wx.Dialog):
 	def _on_clone(self, event):
 		name = self.name_input.GetValue().strip()
 		if not name:
-			self.status_text.SetLabel(constants.ERROR_VOICE_NAME_REQUIRED)
+			self.status_text.ReportFailure(constants.ERROR_VOICE_NAME_REQUIRED)
 			return
 		if not self.audio_files:
-			self.status_text.SetLabel(constants.ERROR_CLONE_FILES_REQUIRED)
+			self.status_text.ReportFailure(constants.ERROR_CLONE_FILES_REQUIRED)
 			return
 		if len(self.audio_files) > constants.CLONE_MAX_AUDIO_FILES:
-			self.status_text.SetLabel(
+			self.status_text.ReportFailure(
 				constants.ERROR_CLONE_FILE_LIMIT_TEMPLATE.format(constants.CLONE_MAX_AUDIO_FILES)
 			)
 			return
 		if not self.rights_checkbox.IsChecked():
-			self.status_text.SetLabel(constants.ERROR_VOICE_RIGHTS_REQUIRED)
+			self.status_text.ReportFailure(constants.ERROR_VOICE_RIGHTS_REQUIRED)
 			return
 		file_paths = [item[constants.KEY_FILE_PATH] for item in self.audio_files]
 		self._set_cloning_state(True)
@@ -245,7 +246,7 @@ class CloneVoiceDialog(wx.Dialog):
 
 	def _on_close(self, event):
 		if self.is_cloning:
-			self.status_text.SetLabel(constants.STATUS_CLONE_CLOSE_BLOCKED)
+			self.status_text.ReportFailure(constants.STATUS_CLONE_CLOSE_BLOCKED)
 			event.Veto()
 			return
 		event.Skip()
@@ -273,4 +274,4 @@ class CloneVoiceDialog(wx.Dialog):
 
 	def _clone_failed(self, message):
 		self._set_cloning_state(False)
-		self.status_text.SetLabel(message)
+		self.status_text.ReportFailure(message)

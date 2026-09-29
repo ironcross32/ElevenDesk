@@ -7,6 +7,7 @@ from elevendesk import config
 from elevendesk import constants
 from elevendesk import playback
 from elevendesk.ui import choices
+from elevendesk.ui.status_text import StatusText
 
 
 class SpeechToSpeechPanel(wx.Panel):
@@ -69,7 +70,7 @@ class SpeechToSpeechPanel(wx.Panel):
 		)
 		self.play_button.Disable()
 		self.save_button.Disable()
-		self.status_text = wx.StaticText(self, label=constants.STATUS_READY, name=constants.LABEL_STATUS)
+		self.status_text = StatusText(self, constants.STATUS_READY, constants.LABEL_STATUS)
 
 	def _layout_controls(self):
 		main_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -142,7 +143,7 @@ class SpeechToSpeechPanel(wx.Panel):
 		try:
 			voices = api.get_voices()
 		except api.ElevenDeskAPIError as error:
-			wx.CallAfter(self.status_text.SetLabel, str(error))
+			wx.CallAfter(self.status_text.ReportFailure, str(error))
 			return
 		wx.CallAfter(self._set_voices, voices, preferred_voice_id)
 
@@ -176,11 +177,11 @@ class SpeechToSpeechPanel(wx.Panel):
 
 	def _on_convert(self, event):
 		if not self.selected_file_path:
-			self.status_text.SetLabel(constants.ERROR_AUDIO_REQUIRED)
+			self.status_text.ReportFailure(constants.ERROR_AUDIO_REQUIRED)
 			return
 		voice_index = self.voice_combo.GetSelection()
 		if voice_index == wx.NOT_FOUND:
-			self.status_text.SetLabel(constants.ERROR_VOICE_REQUIRED)
+			self.status_text.ReportFailure(constants.ERROR_VOICE_REQUIRED)
 			return
 		voice_id = self.voices[voice_index][constants.KEY_VOICE_ID]
 		model_id = choices.get_selected_model_id(self.model_combo, self.models)
@@ -200,7 +201,7 @@ class SpeechToSpeechPanel(wx.Panel):
 		try:
 			config.save_config(settings)
 		except OSError as error:
-			self.status_text.SetLabel(str(error))
+			self.status_text.ReportFailure(str(error))
 
 	def _convert_worker(self, file_path, voice_id, model_id, output_format):
 		try:
@@ -223,7 +224,7 @@ class SpeechToSpeechPanel(wx.Panel):
 
 	def _conversion_failed(self, message):
 		self.convert_button.Enable()
-		self.status_text.SetLabel(message)
+		self.status_text.ReportFailure(message)
 
 	def _on_play(self, event):
 		if self.last_audio:
@@ -258,7 +259,7 @@ class SpeechToSpeechPanel(wx.Panel):
 			with open(file_path, constants.FILE_MODE_BINARY_WRITE) as output_file:
 				output_file.write(self.last_audio)
 		except OSError as error:
-			self.status_text.SetLabel(str(error))
+			self.status_text.ReportFailure(str(error))
 			return False
 		self.status_text.SetLabel(constants.STATUS_SAVED + file_path)
 		return True

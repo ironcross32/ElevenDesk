@@ -5,6 +5,7 @@ from smart_list import Column, SmartList
 
 from elevendesk import api
 from elevendesk import constants
+from elevendesk.ui.status_text import StatusText
 
 
 class PronunciationDialog(wx.Dialog):
@@ -16,7 +17,7 @@ class PronunciationDialog(wx.Dialog):
 			Column(constants.COLUMN_ID, constants.COLUMN_WIDTH_ID, constants.KEY_ID),
 			Column(constants.COLUMN_DESCRIPTION, constants.COLUMN_WIDTH_DESCRIPTION, constants.KEY_DESCRIPTION),
 		])
-		self.status_text = wx.StaticText(self, label=constants.STATUS_LOADING, name=constants.LABEL_STATUS)
+		self.status_text = StatusText(self, constants.STATUS_LOADING, constants.LABEL_STATUS)
 		main_sizer = wx.BoxSizer(wx.VERTICAL)
 		main_sizer.Add(self.dictionary_list.control.control, constants.SIZER_PROPORTION_EXPAND, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
 		main_sizer.Add(self.status_text, constants.SIZER_PROPORTION_NONE, wx.EXPAND)
@@ -27,7 +28,7 @@ class PronunciationDialog(wx.Dialog):
 		try:
 			dictionaries = api.get_pronunciation_dictionaries()
 		except api.ElevenDeskAPIError as error:
-			wx.CallAfter(self.status_text.SetLabel, str(error))
+			wx.CallAfter(self.status_text.ReportFailure, str(error))
 			return
 		wx.CallAfter(self._set_dictionaries, dictionaries)
 

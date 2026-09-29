@@ -121,7 +121,7 @@ class MainFrame(wx.Frame):
 			self.save_audio_bytes(audio_bytes, output_format)
 
 	def _on_open_audio(self, event):
-		self.notebook.SetSelection(self.notebook.GetPageIndex(self.stt_panel))
+		self.notebook.SetSelection(self.notebook.FindPage(self.stt_panel))
 		self.stt_panel.open_audio_file()
 
 	def _on_exit(self, event):
@@ -189,7 +189,7 @@ class MainFrame(wx.Frame):
 				output_file.write(audio_bytes)
 		except OSError as error:
 			if status_text:
-				status_text.SetLabel(str(error))
+				status_text.ReportFailure(str(error))
 			else:
 				wx.MessageBox(str(error), constants.TITLE_ERROR, wx.OK | wx.ICON_ERROR, self)
 			return False

@@ -5,6 +5,7 @@ import wx
 from elevendesk import api
 from elevendesk import constants
 from elevendesk import playback
+from elevendesk.ui.status_text import StatusText
 
 
 class SoundEffectsPanel(wx.Panel):
@@ -50,7 +51,7 @@ class SoundEffectsPanel(wx.Panel):
 		)
 		self.play_button.Disable()
 		self.save_button.Disable()
-		self.status_text = wx.StaticText(self, label=constants.STATUS_READY, name=constants.LABEL_STATUS)
+		self.status_text = StatusText(self, constants.STATUS_READY, constants.LABEL_STATUS)
 
 	def _layout_controls(self):
 		main_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -86,7 +87,7 @@ class SoundEffectsPanel(wx.Panel):
 	def _on_generate(self, event):
 		prompt = self.prompt_input.GetValue().strip()
 		if not prompt:
-			self.status_text.SetLabel(constants.ERROR_PROMPT_REQUIRED)
+			self.status_text.ReportFailure(constants.ERROR_PROMPT_REQUIRED)
 			return
 		self.generate_button.Disable()
 		self.status_text.SetLabel(constants.STATUS_GENERATING_EFFECT)
@@ -113,7 +114,7 @@ class SoundEffectsPanel(wx.Panel):
 
 	def _generation_failed(self, message):
 		self.generate_button.Enable()
-		self.status_text.SetLabel(message)
+		self.status_text.ReportFailure(message)
 
 	def _on_play(self, event):
 		if self.last_audio:

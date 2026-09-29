@@ -6,6 +6,7 @@ from smart_list import Column, SmartList
 from elevendesk import api
 from elevendesk import constants
 from elevendesk import playback
+from elevendesk.ui.status_text import StatusText
 
 
 class HistoryDialog(wx.Dialog):
@@ -30,7 +31,7 @@ class HistoryDialog(wx.Dialog):
 		self.save_button = wx.Button(self, label=constants.LABEL_SAVE, name=constants.LABEL_SAVE)
 		self.delete_label = wx.StaticText(self, label=constants.LABEL_DELETE)
 		self.delete_button = wx.Button(self, label=constants.LABEL_DELETE, name=constants.LABEL_DELETE)
-		self.status_text = wx.StaticText(self, label=constants.STATUS_LOADING, name=constants.LABEL_STATUS)
+		self.status_text = StatusText(self, constants.STATUS_LOADING, constants.LABEL_STATUS)
 		self._layout_controls()
 		self.play_button.SetDefault()
 		self.play_button.Bind(wx.EVT_BUTTON, self._on_play)
@@ -57,7 +58,7 @@ class HistoryDialog(wx.Dialog):
 		try:
 			items = api.get_history()
 		except api.ElevenDeskAPIError as error:
-			wx.CallAfter(self.status_text.SetLabel, str(error))
+			wx.CallAfter(self.status_text.ReportFailure, str(error))
 			return
 		wx.CallAfter(self._set_items, items)
 
@@ -69,7 +70,7 @@ class HistoryDialog(wx.Dialog):
 	def _selected_item(self):
 		item = self.history_list.get_selected_item()
 		if item is None:
-			self.status_text.SetLabel(constants.ERROR_SELECTION_REQUIRED)
+			self.status_text.ReportFailure(constants.ERROR_SELECTION_REQUIRED)
 		return item
 
 	def _on_play(self, event):
@@ -149,7 +150,7 @@ class HistoryDialog(wx.Dialog):
 		self.play_button.SetLabel(constants.LABEL_PLAY)
 		self.play_button.SetName(constants.LABEL_PLAY)
 		self.play_button.Enable()
-		self.status_text.SetLabel(message)
+		self.status_text.ReportFailure(message)
 
 	def _on_save(self, event):
 		item = self._selected_item()
@@ -160,7 +161,7 @@ class HistoryDialog(wx.Dialog):
 		try:
 			audio_bytes = api.get_history_audio(item[constants.KEY_HISTORY_ITEM_ID])
 		except api.ElevenDeskAPIError as error:
-			wx.CallAfter(self.status_text.SetLabel, str(error))
+			wx.CallAfter(self.status_text.ReportFailure, str(error))
 			return
 		wx.CallAfter(
 			self.GetParent().save_audio_bytes,
@@ -178,7 +179,7 @@ class HistoryDialog(wx.Dialog):
 		try:
 			api.delete_history_item(item[constants.KEY_HISTORY_ITEM_ID])
 		except api.ElevenDeskAPIError as error:
-			wx.CallAfter(self.status_text.SetLabel, str(error))
+			wx.CallAfter(self.status_text.ReportFailure, str(error))
 			return
 		wx.CallAfter(self._remove_item, item)
 

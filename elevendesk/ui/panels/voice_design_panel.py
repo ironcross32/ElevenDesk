@@ -4,6 +4,7 @@ import wx
 
 from elevendesk import api
 from elevendesk import constants
+from elevendesk.ui.status_text import StatusText
 
 
 class VoiceDesignPanel(wx.Panel):
@@ -42,7 +43,7 @@ class VoiceDesignPanel(wx.Panel):
 			name=constants.NAME_ADD_DESIGNED_VOICE,
 		)
 		self.add_button.Disable()
-		self.status_text = wx.StaticText(self, label=constants.STATUS_READY, name=constants.LABEL_STATUS)
+		self.status_text = StatusText(self, constants.STATUS_READY, constants.LABEL_STATUS)
 
 	def _layout_controls(self):
 		main_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -73,10 +74,10 @@ class VoiceDesignPanel(wx.Panel):
 		description = self.description_input.GetValue().strip()
 		name = self.name_input.GetValue().strip()
 		if not description:
-			self.status_text.SetLabel(constants.ERROR_VOICE_DESCRIPTION_REQUIRED)
+			self.status_text.ReportFailure(constants.ERROR_VOICE_DESCRIPTION_REQUIRED)
 			return
 		if not name:
-			self.status_text.SetLabel(constants.ERROR_VOICE_NAME_REQUIRED)
+			self.status_text.ReportFailure(constants.ERROR_VOICE_NAME_REQUIRED)
 			return
 		self.design_button.Disable()
 		self.status_text.SetLabel(constants.STATUS_DESIGNING_VOICE)
@@ -108,7 +109,7 @@ class VoiceDesignPanel(wx.Panel):
 
 	def _design_failed(self, message):
 		self.design_button.Enable()
-		self.status_text.SetLabel(message)
+		self.status_text.ReportFailure(message)
 
 	def _on_add(self, event):
 		self.tts_panel.refresh_voices(self.designed_voice[constants.KEY_VOICE_ID])

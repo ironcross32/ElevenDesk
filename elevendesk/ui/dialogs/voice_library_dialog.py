@@ -5,6 +5,7 @@ from smart_list import Column, SmartList
 
 from elevendesk import api
 from elevendesk import constants
+from elevendesk.ui.status_text import StatusText
 
 
 class VoiceLibraryDialog(wx.Dialog):
@@ -22,7 +23,7 @@ class VoiceLibraryDialog(wx.Dialog):
 		])
 		self.use_label = wx.StaticText(self, label=constants.LABEL_USE_VOICE)
 		self.use_button = wx.Button(self, label=constants.LABEL_USE_VOICE, name=constants.LABEL_USE_VOICE)
-		self.status_text = wx.StaticText(self, label=constants.STATUS_LOADING, name=constants.LABEL_STATUS)
+		self.status_text = StatusText(self, constants.STATUS_LOADING, constants.LABEL_STATUS)
 		self._layout_controls()
 		self.search_input.Bind(wx.EVT_TEXT, self._on_search)
 		self.use_button.Bind(wx.EVT_BUTTON, self._on_use)
@@ -44,7 +45,7 @@ class VoiceLibraryDialog(wx.Dialog):
 		try:
 			voices = api.get_voices()
 		except api.ElevenDeskAPIError as error:
-			wx.CallAfter(self.status_text.SetLabel, str(error))
+			wx.CallAfter(self.status_text.ReportFailure, str(error))
 			return
 		wx.CallAfter(self._set_voices, voices)
 
@@ -73,7 +74,7 @@ class VoiceLibraryDialog(wx.Dialog):
 	def _on_use(self, event):
 		voice = self.voice_list.get_selected_item()
 		if voice is None:
-			self.status_text.SetLabel(constants.ERROR_SELECTION_REQUIRED)
+			self.status_text.ReportFailure(constants.ERROR_SELECTION_REQUIRED)
 			return
 		self.tts_panel.refresh_voices(voice[constants.KEY_VOICE_ID])
 		self.Destroy()

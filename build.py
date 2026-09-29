@@ -49,7 +49,7 @@ def pyinstaller(*args):
 	_ENTRY.write_text("from elevendesk.__main__ import run\nrun()\n")
 	try:
 		run(["uv", "run", "pyinstaller", "--name", APP_NAME, "--windowed",
-			 "--clean", "--noconfirm", "--collect-all", APP_NAME.lower()]
+			 "--clean", "--noconfirm", "--collect-all", APP_NAME.lower(), "--collect-all", "prism"]
 			+ list(args) + [str(_ENTRY)])
 	finally:
 		_ENTRY.unlink(missing_ok=True)

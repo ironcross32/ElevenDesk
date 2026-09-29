@@ -6,6 +6,7 @@ from elevendesk import config
 from elevendesk import constants
 from elevendesk import playback
 from elevendesk.ui import choices
+from elevendesk.ui.status_text import StatusText
 
 
 class AudioDevicesDialog(wx.Dialog):
@@ -25,7 +26,7 @@ class AudioDevicesDialog(wx.Dialog):
 		self.save_button = wx.Button(self, wx.ID_SAVE, constants.LABEL_SAVE, name=constants.LABEL_SAVE)
 		self.cancel_label = wx.StaticText(self, label=constants.LABEL_CANCEL)
 		self.cancel_button = wx.Button(self, wx.ID_CANCEL, constants.LABEL_CANCEL, name=constants.LABEL_CANCEL)
-		self.status_text = wx.StaticText(self, label=constants.STATUS_LOADING, name=constants.LABEL_STATUS)
+		self.status_text = StatusText(self, constants.STATUS_LOADING, constants.LABEL_STATUS)
 		self.save_button.Disable()
 
 	def _layout_controls(self):
@@ -55,7 +56,7 @@ class AudioDevicesDialog(wx.Dialog):
 		try:
 			output_devices, input_devices = playback.get_devices()
 		except Exception as error:
-			wx.CallAfter(self.status_text.SetLabel, str(error))
+			wx.CallAfter(self.status_text.ReportFailure, str(error))
 			return
 		wx.CallAfter(self._populate_devices, output_devices, input_devices)
 
