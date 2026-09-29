@@ -5,7 +5,7 @@ description = "An accessible wxPython desktop client for the ElevenLabs API."
 readme = "README.md"
 requires-python = ">=3.13,<3.15"
 dependencies = [
-	"elevenlabs",
+	"elevenlabs>=2.70.0",
 	"prismatoid>=0.18.2",
 	"smart-list",
 	"sound-lib>=0.83",

@@ -236,23 +236,18 @@ def design_voice(prompt, name):
 		_get_sdk_method(client, constants.API_ATTR_VOICE_DESIGN, constants.API_ATTR_CREATE_PREVIEWS),
 		{
 			constants.API_KW_VOICE_DESCRIPTION: prompt,
-			constants.API_KW_TEXT: prompt,
+			constants.API_KW_AUTO_GENERATE_TEXT: True,
 		},
 	)
 	previews = _get_collection(preview_response, constants.API_ATTR_PREVIEWS)
 	if not previews:
 		raise ElevenDeskAPIError(constants.ERROR_SDK_RESPONSE)
 	preview = previews[constants.FIRST_ITEM_INDEX]
-	preview_id = _get_attribute(preview, constants.API_ATTR_VOICE_PREVIEW, constants.EMPTY_TEXT)
+	preview_id = _get_attribute(preview, constants.API_KW_GENERATED_VOICE_ID, constants.EMPTY_TEXT)
 	if not preview_id:
-		preview_id = _get_attribute(preview, constants.API_KW_GENERATED_VOICE_ID, constants.EMPTY_TEXT)
-	create_method = _get_sdk_method(
-		client,
-		constants.API_ATTR_VOICE_DESIGN,
-		constants.API_ATTR_VOICE_DESIGN_CREATE,
-	)
+		raise ElevenDeskAPIError(constants.ERROR_SDK_RESPONSE)
 	voice_response = _call_sdk(
-		create_method,
+		_get_sdk_method(client, constants.API_ATTR_VOICE_DESIGN, constants.API_ATTR_CREATE),
 		{
 			constants.API_KW_GENERATED_VOICE_ID: preview_id,
 			constants.API_KW_VOICE_NAME: name,
@@ -348,7 +343,7 @@ def get_pronunciation_dictionaries():
 	if pronunciation_client is None:
 		raise ElevenDeskAPIError(constants.ERROR_SDK_RESPONSE)
 	response = _call_sdk(
-		getattr(pronunciation_client, constants.API_ATTR_GET_ALL),
+		getattr(pronunciation_client, constants.API_ATTR_LIST),
 		{},
 	)
 	dictionaries = []
