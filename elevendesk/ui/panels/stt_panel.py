@@ -5,16 +5,19 @@ import wx
 from elevendesk import api
 from elevendesk import config
 from elevendesk import constants
+from elevendesk.ui import choices
 
 
 class SpeechToTextPanel(wx.Panel):
 	def __init__(self, parent):
 		wx.Panel.__init__(self, parent)
 		self.selected_file_path = constants.EMPTY_TEXT
+		self.models = api.models_from_ids(constants.FALLBACK_STT_MODEL_IDS)
 		self._create_controls()
 		self._layout_controls()
 		self._bind_events()
 		self._set_tab_order()
+		self._apply_defaults()
 
 	def _create_controls(self):
 		self.open_button_label = wx.StaticText(self, label=constants.LABEL_OPEN_AUDIO)
@@ -28,6 +31,12 @@ class SpeechToTextPanel(wx.Panel):
 			self,
 			style=wx.TE_READONLY,
 			name=constants.NAME_SELECTED_TRANSCRIPTION_FILE,
+		)
+		self.model_label = wx.StaticText(self, label=constants.LABEL_MODEL)
+		self.model_combo = choices.create_choice(
+			self,
+			choices=[model[constants.KEY_NAME] for model in self.models],
+			name=constants.LABEL_MODEL,
 		)
 		self.transcribe_label = wx.StaticText(self, label=constants.LABEL_TRANSCRIBE)
 		self.transcribe_button = wx.Button(
@@ -59,6 +68,7 @@ class SpeechToTextPanel(wx.Panel):
 		for label, control in (
 			(self.open_button_label, self.open_button),
 			(self.selected_file_label, self.selected_file),
+			(self.model_label, self.model_combo),
 			(self.transcribe_label, self.transcribe_button),
 			(self.transcript_label, self.transcript_output),
 		):
@@ -76,7 +86,8 @@ class SpeechToTextPanel(wx.Panel):
 
 	def _set_tab_order(self):
 		self.selected_file.MoveAfterInTabOrder(self.open_button)
-		self.transcribe_button.MoveAfterInTabOrder(self.selected_file)
+		self.model_combo.MoveAfterInTabOrder(self.selected_file)
+		self.transcribe_button.MoveAfterInTabOrder(self.model_combo)
 		self.transcript_output.MoveAfterInTabOrder(self.transcribe_button)
 		self.copy_button.MoveAfterInTabOrder(self.transcript_output)
 		self.save_button.MoveAfterInTabOrder(self.copy_button)
@@ -86,6 +97,18 @@ class SpeechToTextPanel(wx.Panel):
 		self.transcribe_button.Bind(wx.EVT_BUTTON, self._on_transcribe)
 		self.copy_button.Bind(wx.EVT_BUTTON, self._on_copy)
 		self.save_button.Bind(wx.EVT_BUTTON, self._on_save)
+
+	def _apply_defaults(self):
+		choices.select_model(self.model_combo, self.models, config.load_config()[constants.KEY_DEFAULT_STT_MODEL])
+
+	def set_models(self, models):
+		selected_model_id = choices.get_selected_model_id(self.model_combo, self.models)
+		self.models = models
+		choices.set_model_choices(
+			self.model_combo,
+			self.models,
+			selected_model_id or config.load_config()[constants.KEY_DEFAULT_STT_MODEL],
+		)
 
 	def _on_open(self, event):
 		self.open_audio_file()
@@ -107,15 +130,25 @@ class SpeechToTextPanel(wx.Panel):
 		if not self.selected_file_path:
 			self.status_text.SetLabel(constants.ERROR_AUDIO_REQUIRED)
 			return
+		model_id = choices.get_selected_model_id(self.model_combo, self.models)
+		self._save_model_id(model_id)
 		self.transcribe_button.Disable()
 		self.status_text.SetLabel(constants.STATUS_TRANSCRIBING)
-		threading.Thread(target=self._transcribe_worker, daemon=constants.THREAD_DAEMON).start()
+		threading.Thread(target=self._transcribe_worker, args=(model_id,), daemon=constants.THREAD_DAEMON).start()
 
-	def _transcribe_worker(self):
+	def _save_model_id(self, model_id):
+		settings = config.load_config()
+		settings[constants.KEY_DEFAULT_STT_MODEL] = model_id
+		try:
+			config.save_config(settings)
+		except OSError as error:
+			self.status_text.SetLabel(str(error))
+
+	def _transcribe_worker(self, model_id):
 		try:
 			with open(self.selected_file_path, constants.FILE_MODE_BINARY_READ) as audio_file:
 				audio_bytes = audio_file.read()
-			transcript = api.speech_to_text(audio_bytes, constants.MODEL_SCRIBE_V1)
+			transcript = api.speech_to_text(audio_bytes, model_id)
 		except (OSError, api.ElevenDeskAPIError) as error:
 			wx.CallAfter(self._transcription_failed, str(error))
 			return

@@ -13,6 +13,7 @@ class SpeechToSpeechPanel(wx.Panel):
 	def __init__(self, parent):
 		wx.Panel.__init__(self, parent)
 		self.voices = []
+		self.models = api.models_from_ids(constants.FALLBACK_STS_MODEL_IDS)
 		self.selected_file_path = constants.EMPTY_TEXT
 		self.last_audio = None
 		self.last_output_format = constants.DEFAULT_OUTPUT_FORMAT
@@ -41,7 +42,7 @@ class SpeechToSpeechPanel(wx.Panel):
 		self.model_label = wx.StaticText(self, label=constants.LABEL_MODEL)
 		self.model_combo = choices.create_choice(
 			self,
-			choices=list(constants.MODEL_STS_IDS),
+			choices=[model[constants.KEY_NAME] for model in self.models],
 			name=constants.LABEL_MODEL,
 		)
 		self.output_format_label = wx.StaticText(self, label=constants.LABEL_OUTPUT_FORMAT)
@@ -110,10 +111,8 @@ class SpeechToSpeechPanel(wx.Panel):
 
 	def _apply_defaults(self):
 		settings = config.load_config()
-		self._select_combo(self.model_combo, settings.get(constants.KEY_DEFAULT_MODEL, constants.MODEL_STS_MULTILINGUAL_V2))
+		choices.select_model(self.model_combo, self.models, settings[constants.KEY_DEFAULT_STS_MODEL])
 		self._select_combo(self.output_format_combo, settings[constants.KEY_DEFAULT_OUTPUT_FORMAT])
-		if self.model_combo.GetSelection() == wx.NOT_FOUND and self.model_combo.GetCount():
-			self.model_combo.SetSelection(constants.FIRST_ITEM_INDEX)
 
 	def _select_combo(self, combo, value):
 		selection = combo.FindString(value)
@@ -121,6 +120,15 @@ class SpeechToSpeechPanel(wx.Panel):
 			selection = constants.FIRST_ITEM_INDEX
 		if selection != wx.NOT_FOUND:
 			combo.SetSelection(selection)
+
+	def set_models(self, models):
+		selected_model_id = choices.get_selected_model_id(self.model_combo, self.models)
+		self.models = models
+		choices.set_model_choices(
+			self.model_combo,
+			self.models,
+			selected_model_id or config.load_config()[constants.KEY_DEFAULT_STS_MODEL],
+		)
 
 	def refresh_voices(self, preferred_voice_id=None):
 		self.status_text.SetLabel(constants.STATUS_LOADING_VOICES)
@@ -175,7 +183,8 @@ class SpeechToSpeechPanel(wx.Panel):
 			self.status_text.SetLabel(constants.ERROR_VOICE_REQUIRED)
 			return
 		voice_id = self.voices[voice_index][constants.KEY_VOICE_ID]
-		model_id = self.model_combo.GetStringSelection()
+		model_id = choices.get_selected_model_id(self.model_combo, self.models)
+		self._save_model_id(model_id)
 		output_format = self.output_format_combo.GetStringSelection()
 		self.convert_button.Disable()
 		self.status_text.SetLabel(constants.STATUS_CONVERTING)
@@ -184,6 +193,14 @@ class SpeechToSpeechPanel(wx.Panel):
 			args=(self.selected_file_path, voice_id, model_id, output_format),
 			daemon=constants.THREAD_DAEMON,
 		).start()
+
+	def _save_model_id(self, model_id):
+		settings = config.load_config()
+		settings[constants.KEY_DEFAULT_STS_MODEL] = model_id
+		try:
+			config.save_config(settings)
+		except OSError as error:
+			self.status_text.SetLabel(str(error))
 
 	def _convert_worker(self, file_path, voice_id, model_id, output_format):
 		try:

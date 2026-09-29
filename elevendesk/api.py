@@ -129,16 +129,45 @@ def get_voices():
 def get_models():
 	client = get_client()
 	response = _call_sdk(
-		_get_sdk_method(client, constants.API_ATTR_MODELS, constants.API_ATTR_GET_ALL),
+		_get_sdk_method(client, constants.API_ATTR_MODELS, constants.API_ATTR_LIST),
 		{},
 	)
 	models = []
 	for model in _get_collection(response, constants.API_ATTR_MODELS):
+		model_id = _get_attribute(model, constants.API_ATTR_MODEL_ID, constants.EMPTY_TEXT)
+		if not model_id:
+			continue
 		models.append({
-			constants.KEY_ID: _get_attribute(model, constants.API_ATTR_MODEL_ID, constants.EMPTY_TEXT),
-			constants.KEY_NAME: _get_attribute(model, constants.API_ATTR_NAME, constants.EMPTY_TEXT),
+			constants.KEY_ID: model_id,
+			constants.KEY_NAME: _get_attribute(model, constants.API_ATTR_NAME, constants.EMPTY_TEXT) or model_id,
+			constants.KEY_CAN_DO_TTS: bool(_get_attribute(model, constants.API_ATTR_CAN_DO_TTS, False)),
+			constants.KEY_CAN_DO_STS: bool(_get_attribute(model, constants.API_ATTR_CAN_DO_STS, False)),
 		})
 	return models
+
+
+def models_from_ids(model_ids):
+	return [{constants.KEY_ID: model_id, constants.KEY_NAME: model_id} for model_id in model_ids]
+
+
+def filter_tts_models(models):
+	tts_models = [model for model in models if model[constants.KEY_CAN_DO_TTS]]
+	return tts_models or models_from_ids(constants.FALLBACK_TTS_MODEL_IDS)
+
+
+def filter_sts_models(models):
+	sts_models = [model for model in models if model[constants.KEY_CAN_DO_STS]]
+	return sts_models or models_from_ids(constants.FALLBACK_STS_MODEL_IDS)
+
+
+def filter_stt_models(models):
+	# The models endpoint does not reliably list Scribe models, so always keep the known ones.
+	stt_models = [model for model in models if model[constants.KEY_ID].startswith(constants.MODEL_STT_PREFIX)]
+	known_ids = {model[constants.KEY_ID] for model in stt_models}
+	for fallback_model in models_from_ids(constants.FALLBACK_STT_MODEL_IDS):
+		if fallback_model[constants.KEY_ID] not in known_ids:
+			stt_models.append(fallback_model)
+	return stt_models
 
 
 def text_to_speech(text, voice_id, model_id, voice_settings, output_format):

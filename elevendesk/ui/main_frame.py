@@ -1,5 +1,8 @@
+import threading
+
 import wx
 
+from elevendesk import api
 from elevendesk import config
 from elevendesk import constants
 from elevendesk import playback
@@ -34,16 +37,35 @@ class MainFrame(wx.Frame):
 		self.notebook.AddPage(self.voice_design_panel, constants.TAB_VOICE_DESIGN)
 		self.Bind(wx.EVT_CLOSE, self._on_close)
 		self.Centre()
+		self.refresh_models()
 
 	def initialize(self):
 		if not config.load_config()[constants.KEY_API_KEY]:
-			preferences_dialog = SettingsDialog(self)
+			preferences_dialog = SettingsDialog(self, self.tts_panel.models)
 			if preferences_dialog.ShowModal() == wx.ID_OK:
 				self.tts_panel._apply_defaults()
 				self.tts_panel.refresh_voices()
+				self.sts_panel.refresh_voices()
+				self.refresh_models()
 			preferences_dialog.Destroy()
 		self.Show()
 		wx.CallAfter(self.tts_panel.focus_text_input)
+
+	def refresh_models(self):
+		threading.Thread(target=self._load_models_worker, daemon=constants.THREAD_DAEMON).start()
+
+	def _load_models_worker(self):
+		try:
+			models = api.get_models()
+		except api.ElevenDeskAPIError:
+			# Panels keep their fallback model lists; voice loading already reports API errors.
+			return
+		wx.CallAfter(self._set_models, models)
+
+	def _set_models(self, models):
+		self.tts_panel.set_models(api.filter_tts_models(models))
+		self.sts_panel.set_models(api.filter_sts_models(models))
+		self.stt_panel.set_models(api.filter_stt_models(models))
 
 	def _create_menu_bar(self):
 		menu_bar = wx.MenuBar()
@@ -126,10 +148,12 @@ class MainFrame(wx.Frame):
 		dialog.Destroy()
 
 	def _on_preferences(self, event):
-		dialog = SettingsDialog(self)
+		dialog = SettingsDialog(self, self.tts_panel.models)
 		if dialog.ShowModal() == wx.ID_OK:
 			self.tts_panel._apply_defaults()
 			self.tts_panel.refresh_voices()
+			self.sts_panel.refresh_voices()
+			self.refresh_models()
 		dialog.Destroy()
 
 	def _on_about(self, event):

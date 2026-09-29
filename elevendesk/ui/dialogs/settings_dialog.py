@@ -9,10 +9,11 @@ from elevendesk.ui import choices
 
 
 class SettingsDialog(wx.Dialog):
-	def __init__(self, parent):
+	def __init__(self, parent, models):
 		wx.Dialog.__init__(self, parent, title=constants.TITLE_PREFERENCES, size=constants.SMALL_DIALOG_SIZE)
 		self.saved = False
 		self.settings = config.load_config()
+		self.models = models
 		self._create_controls()
 		self._layout_controls()
 		self._bind_events()
@@ -22,7 +23,11 @@ class SettingsDialog(wx.Dialog):
 		self.api_key_label = wx.StaticText(self, label=constants.LABEL_API_KEY)
 		self.api_key_input = wx.TextCtrl(self, style=wx.TE_PASSWORD, name=constants.LABEL_API_KEY)
 		self.model_label = wx.StaticText(self, label=constants.LABEL_DEFAULT_MODEL)
-		self.model_combo = choices.create_choice(self, choices=list(constants.MODEL_IDS), name=constants.LABEL_DEFAULT_MODEL)
+		self.model_combo = choices.create_choice(
+			self,
+			choices=[model[constants.KEY_NAME] for model in self.models],
+			name=constants.LABEL_DEFAULT_MODEL,
+		)
 		self.voice_id_label = wx.StaticText(self, label=constants.LABEL_DEFAULT_VOICE_ID)
 		self.voice_id_input = wx.TextCtrl(self, name=constants.LABEL_DEFAULT_VOICE_ID)
 		self.format_label = wx.StaticText(self, label=constants.LABEL_DEFAULT_OUTPUT_FORMAT)
@@ -70,7 +75,7 @@ class SettingsDialog(wx.Dialog):
 		self.api_key_input.SetValue(self.settings[constants.KEY_API_KEY])
 		self.voice_id_input.SetValue(self.settings[constants.KEY_DEFAULT_VOICE_ID])
 		self.output_directory_input.SetValue(self.settings[constants.KEY_OUTPUT_DIRECTORY])
-		self._select_combo(self.model_combo, self.settings[constants.KEY_DEFAULT_MODEL])
+		choices.select_model(self.model_combo, self.models, self.settings[constants.KEY_DEFAULT_MODEL])
 		self._select_combo(self.format_combo, self.settings[constants.KEY_DEFAULT_OUTPUT_FORMAT])
 
 	def _select_combo(self, combo, value):
@@ -92,13 +97,14 @@ class SettingsDialog(wx.Dialog):
 		output_directory = self.output_directory_input.GetValue().strip()
 		if output_directory:
 			os.makedirs(output_directory, exist_ok=True)
-		settings = {
+		settings = config.load_config()
+		settings.update({
 			constants.KEY_API_KEY: self.api_key_input.GetValue().strip(),
-			constants.KEY_DEFAULT_MODEL: self.model_combo.GetStringSelection(),
+			constants.KEY_DEFAULT_MODEL: choices.get_selected_model_id(self.model_combo, self.models),
 			constants.KEY_DEFAULT_VOICE_ID: self.voice_id_input.GetValue().strip(),
 			constants.KEY_DEFAULT_OUTPUT_FORMAT: self.format_combo.GetStringSelection(),
 			constants.KEY_OUTPUT_DIRECTORY: output_directory,
-		}
+		})
 		try:
 			config.save_config(settings)
 		except OSError as error:

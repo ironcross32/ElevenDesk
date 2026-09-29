@@ -13,6 +13,7 @@ class TextToSpeechPanel(wx.Panel):
 	def __init__(self, parent):
 		wx.Panel.__init__(self, parent)
 		self.voices = []
+		self.models = api.models_from_ids(constants.FALLBACK_TTS_MODEL_IDS)
 		self.last_audio = None
 		self.last_output_format = constants.DEFAULT_OUTPUT_FORMAT
 		self._create_controls()
@@ -26,7 +27,11 @@ class TextToSpeechPanel(wx.Panel):
 		self.voice_label = wx.StaticText(self, label=constants.LABEL_VOICE)
 		self.voice_combo = choices.create_choice(self, name=constants.LABEL_VOICE)
 		self.model_label = wx.StaticText(self, label=constants.LABEL_MODEL)
-		self.model_combo = choices.create_choice(self, choices=list(constants.MODEL_IDS), name=constants.LABEL_MODEL)
+		self.model_combo = choices.create_choice(
+			self,
+			choices=[model[constants.KEY_NAME] for model in self.models],
+			name=constants.LABEL_MODEL,
+		)
 		self.output_format_label = wx.StaticText(self, label=constants.LABEL_OUTPUT_FORMAT)
 		self.output_format_combo = choices.create_choice(self, choices=list(constants.OUTPUT_FORMATS), name=constants.LABEL_OUTPUT_FORMAT)
 		self.text_label = wx.StaticText(self, label=constants.LABEL_TEXT)
@@ -158,7 +163,7 @@ class TextToSpeechPanel(wx.Panel):
 
 	def _apply_defaults(self):
 		settings = config.load_config()
-		self._select_combo(self.model_combo, settings[constants.KEY_DEFAULT_MODEL])
+		choices.select_model(self.model_combo, self.models, settings[constants.KEY_DEFAULT_MODEL])
 		self._select_combo(self.output_format_combo, settings[constants.KEY_DEFAULT_OUTPUT_FORMAT])
 
 	def _select_combo(self, combo, value):
@@ -186,6 +191,15 @@ class TextToSpeechPanel(wx.Panel):
 		else:
 			self.style_value.SetLabel(constants.SLIDER_VALUE_TEMPLATE.format(constants.LABEL_STYLE, value))
 			slider.SetName(constants.SLIDER_ACCESSIBLE_NAME_TEMPLATE.format(constants.LABEL_STYLE, value))
+
+	def set_models(self, models):
+		selected_model_id = choices.get_selected_model_id(self.model_combo, self.models)
+		self.models = models
+		choices.set_model_choices(
+			self.model_combo,
+			self.models,
+			selected_model_id or config.load_config()[constants.KEY_DEFAULT_MODEL],
+		)
 
 	def refresh_voices(self, preferred_voice_id=None):
 		self.status_text.SetLabel(constants.STATUS_LOADING_VOICES)
@@ -257,7 +271,7 @@ class TextToSpeechPanel(wx.Panel):
 			return
 		voice_id = self.voices[voice_index][constants.KEY_VOICE_ID]
 		self._save_voice_id(voice_id)
-		model_id = self.model_combo.GetStringSelection()
+		model_id = choices.get_selected_model_id(self.model_combo, self.models)
 		output_format = self.output_format_combo.GetStringSelection()
 		voice_settings = {
 			constants.API_KEY_STABILITY: self.stability_slider.GetValue() / constants.PERCENT_DIVISOR,
