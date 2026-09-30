@@ -197,7 +197,7 @@ class CloneVoiceDialog(wx.Dialog):
 		item = lists.get_selected_item(self.files_list)
 		if item is not None:
 			self.audio_files.remove(item)
-			self.files_list.delete_item(item)
+			lists.delete_item(self.files_list, item)
 			self._update_clone_button()
 
 	def _on_rights_changed(self, event):

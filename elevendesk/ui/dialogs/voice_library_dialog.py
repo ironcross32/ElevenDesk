@@ -94,15 +94,13 @@ class VoiceLibraryDialog(wx.Dialog):
 		self.SetSizer(main_sizer)
 
 	def _bind_events(self):
-		self.source_combo.Bind(wx.EVT_COMBOBOX, self._on_source_changed)
-		self.source_combo.Bind(wx.EVT_CHOICE, self._on_source_changed)
+		choices.bind_selection(self.source_combo, self._on_source_changed)
 		self.search_input.Bind(wx.EVT_TEXT, self._on_search_text)
 		self.search_input.Bind(wx.EVT_TEXT_ENTER, self._on_search)
 		self.search_button.Bind(wx.EVT_BUTTON, self._on_search)
 		for filter_combo in (self.gender_combo, self.age_combo, self.language_combo, self.sort_combo):
-			filter_combo.Bind(wx.EVT_COMBOBOX, self._on_search)
-			filter_combo.Bind(wx.EVT_CHOICE, self._on_search)
-		self.voice_list.control.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self._on_preview)
+			choices.bind_selection(filter_combo, self._on_search)
+		lists.bind_item_activated(self.voice_list, self._on_preview)
 		self.preview_button.Bind(wx.EVT_BUTTON, self._on_preview)
 		self.stop_button.Bind(wx.EVT_BUTTON, self._on_stop)
 		self.use_button.Bind(wx.EVT_BUTTON, self._on_use)

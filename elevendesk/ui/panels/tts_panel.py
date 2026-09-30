@@ -21,39 +21,45 @@ class TextToSpeechPanel(wx.Panel):
 		self._create_controls()
 		self._bind_events()
 		self._layout_controls()
-		self._set_tab_order()
 		self._apply_defaults()
 		self.refresh_voices()
 
 	def _create_controls(self):
-		self.voice_label = wx.StaticText(self, label=constants.LABEL_VOICE)
-		self.voice_combo = choices.create_choice(self, name=constants.LABEL_VOICE)
+		# Controls are created in the order they appear, which is both the tab order and the order VoiceOver reads them in
+		# (MoveAfterInTabOrder does not change VoiceOver's order). Grouped controls are children of their group's box,
+		# so screen readers announce the group and object navigation finds its controls inside it.
+		self.text_label = wx.StaticText(self, label=constants.LABEL_TEXT)
+		self.text_input = wx.TextCtrl(self, style=wx.TE_MULTILINE, name=constants.LABEL_TEXT)
+		self.text_input.SetMinSize((constants.DEFAULT_SIZE_WIDTH, constants.TEXT_MIN_HEIGHT))
 		self.model_label = wx.StaticText(self, label=constants.LABEL_MODEL)
 		self.model_combo = choices.create_choice(self, name=constants.LABEL_MODEL)
 		self.output_format_label = wx.StaticText(self, label=constants.LABEL_OUTPUT_FORMAT)
 		self.output_format_combo = choices.create_choice(self, choices=list(constants.OUTPUT_FORMATS), name=constants.LABEL_OUTPUT_FORMAT)
-		self.text_label = wx.StaticText(self, label=constants.LABEL_TEXT)
-		self.text_input = wx.TextCtrl(self, style=wx.TE_MULTILINE, name=constants.LABEL_TEXT)
-		self.text_input.SetMinSize((constants.DEFAULT_SIZE_WIDTH, constants.TEXT_MIN_HEIGHT))
+		self.settings_sizer = wx.StaticBoxSizer(wx.VERTICAL, self, constants.LABEL_VOICE_SETTINGS)
+		settings_box = self.settings_sizer.GetStaticBox()
 		self.stability_label, self.stability_slider, self.stability_value = self._create_slider(
+			settings_box,
 			constants.LABEL_STABILITY,
 			constants.SLIDER_MINIMUM,
 			constants.SLIDER_MAXIMUM,
 			constants.SLIDER_DEFAULT_STABILITY,
 		)
 		self.similarity_label, self.similarity_slider, self.similarity_value = self._create_slider(
+			settings_box,
 			constants.LABEL_SIMILARITY,
 			constants.SLIDER_MINIMUM,
 			constants.SLIDER_MAXIMUM,
 			constants.SLIDER_DEFAULT_SIMILARITY,
 		)
 		self.style_label, self.style_slider, self.style_value = self._create_slider(
+			settings_box,
 			constants.LABEL_STYLE,
 			constants.SLIDER_MINIMUM,
 			constants.SLIDER_MAXIMUM,
 			constants.SLIDER_DEFAULT_STYLE,
 		)
 		self.speed_label, self.speed_slider, self.speed_value = self._create_slider(
+			settings_box,
 			constants.LABEL_SPEED,
 			constants.SLIDER_SPEED_MINIMUM,
 			constants.SLIDER_SPEED_MAXIMUM,
@@ -71,6 +77,8 @@ class TextToSpeechPanel(wx.Panel):
 				constants.SLIDER_SPEED_DEFAULT / constants.SLIDER_SPEED_DIVISOR,
 			)
 		)
+		self.voice_label = wx.StaticText(self, label=constants.LABEL_VOICE)
+		self.voice_combo = choices.create_choice(self, name=constants.LABEL_VOICE)
 		self.generate_button = wx.Button(
 			self,
 			label=constants.LABEL_GENERATE,
@@ -83,16 +91,16 @@ class TextToSpeechPanel(wx.Panel):
 		self.save_button.Disable()
 		self.status_text = StatusText(self, constants.STATUS_READY, constants.LABEL_STATUS)
 
-	def _create_slider(self, label, minimum, maximum, value):
-		slider_label = wx.StaticText(self, label=label)
+	def _create_slider(self, parent, label, minimum, maximum, value):
+		slider_label = wx.StaticText(parent, label=label)
 		slider = wx.Slider(
-			self,
+			parent,
 			value=value,
 			minValue=minimum,
 			maxValue=maximum,
 			name=constants.SLIDER_ACCESSIBLE_NAME_TEMPLATE.format(label, value),
 		)
-		value_label = wx.StaticText(self, label=constants.SLIDER_VALUE_TEMPLATE.format(label, value))
+		value_label = wx.StaticText(parent, label=constants.SLIDER_VALUE_TEMPLATE.format(label, value))
 		return slider_label, slider, value_label
 
 	def _bind_events(self):
@@ -100,7 +108,7 @@ class TextToSpeechPanel(wx.Panel):
 		self.generate_button.Bind(wx.EVT_BUTTON, self._on_generate)
 		self.play_button.Bind(wx.EVT_BUTTON, self._on_play)
 		self.save_button.Bind(wx.EVT_BUTTON, self._on_save)
-		self.voice_combo.Bind(wx.EVT_COMBOBOX, self._on_voice_selected)
+		choices.bind_selection(self.voice_combo, self._on_voice_selected)
 		self.Bind(wx.EVT_CHAR_HOOK, self._on_key_hook)
 		for slider in (
 			self.stability_slider,
@@ -120,17 +128,16 @@ class TextToSpeechPanel(wx.Panel):
 			main_sizer.Add(label, constants.SIZER_PROPORTION_NONE, wx.BOTTOM, constants.CONTROL_GAP)
 			proportion = constants.SIZER_PROPORTION_EXPAND if control is self.text_input else constants.SIZER_PROPORTION_NONE
 			main_sizer.Add(control, proportion, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
-		settings_sizer = wx.StaticBoxSizer(wx.VERTICAL, self, constants.LABEL_VOICE_SETTINGS)
 		for slider_label, slider, value_label in (
 			(self.stability_label, self.stability_slider, self.stability_value),
 			(self.similarity_label, self.similarity_slider, self.similarity_value),
 			(self.style_label, self.style_slider, self.style_value),
 			(self.speed_label, self.speed_slider, self.speed_value),
 		):
-			settings_sizer.Add(slider_label, constants.SIZER_PROPORTION_NONE, wx.BOTTOM, constants.CONTROL_GAP)
-			settings_sizer.Add(slider, constants.SIZER_PROPORTION_NONE, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
-			settings_sizer.Add(value_label, constants.SIZER_PROPORTION_NONE, wx.BOTTOM, constants.SECTION_GAP)
-		main_sizer.Add(settings_sizer, constants.SIZER_PROPORTION_NONE, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
+			self.settings_sizer.Add(slider_label, constants.SIZER_PROPORTION_NONE, wx.BOTTOM, constants.CONTROL_GAP)
+			self.settings_sizer.Add(slider, constants.SIZER_PROPORTION_NONE, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
+			self.settings_sizer.Add(value_label, constants.SIZER_PROPORTION_NONE, wx.BOTTOM, constants.SECTION_GAP)
+		main_sizer.Add(self.settings_sizer, constants.SIZER_PROPORTION_NONE, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
 		action_sizer = wx.BoxSizer(wx.HORIZONTAL)
 		action_sizer.Add(self.voice_label, constants.SIZER_PROPORTION_NONE, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, constants.CONTROL_GAP)
 		action_sizer.Add(self.voice_combo, constants.SIZER_PROPORTION_EXPAND, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, constants.SECTION_GAP)
@@ -140,23 +147,6 @@ class TextToSpeechPanel(wx.Panel):
 		main_sizer.Add(self.status_text, constants.SIZER_PROPORTION_NONE, wx.EXPAND)
 		self.SetSizer(main_sizer)
 		main_sizer.SetSizeHints(self)
-
-	def _set_tab_order(self):
-		controls = (
-			self.text_input,
-			self.model_combo,
-			self.output_format_combo,
-			self.stability_slider,
-			self.similarity_slider,
-			self.style_slider,
-			self.speed_slider,
-			self.voice_combo,
-			self.generate_button,
-			self.play_button,
-			self.save_button,
-		)
-		for control_index in range(constants.FIRST_ITEM_INDEX + constants.INDEX_STEP, len(controls)):
-			controls[control_index].MoveAfterInTabOrder(controls[control_index - constants.INDEX_STEP])
 
 	def focus_text_input(self):
 		self.text_input.SetFocus()

@@ -91,8 +91,8 @@ class PronunciationDialog(wx.Dialog):
 		self.SetSizer(main_sizer)
 
 	def _bind_events(self):
-		self.dictionary_list.control.Bind(wx.EVT_LIST_ITEM_SELECTED, self._on_dictionary_selected)
-		self.rule_list.control.Bind(wx.EVT_LIST_KEY_DOWN, self._on_rule_key)
+		lists.bind_selection_changed(self.dictionary_list, self._on_dictionary_selected)
+		lists.bind_key_down(self.rule_list, self._on_rule_key)
 		self.use_in_tts_checkbox.Bind(wx.EVT_CHECKBOX, self._on_use_in_tts)
 		self.new_button.Bind(wx.EVT_BUTTON, self._on_new)
 		self.import_button.Bind(wx.EVT_BUTTON, self._on_import)
@@ -409,7 +409,7 @@ class PronunciationDialog(wx.Dialog):
 		)
 
 	def _on_rule_key(self, event):
-		if event.GetKeyCode() == wx.WXK_DELETE:
+		if lists.is_delete_key(event):
 			self._on_remove_rule(event)
 			return
 		event.Skip()

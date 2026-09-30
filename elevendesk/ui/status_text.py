@@ -82,7 +82,9 @@ class StatusText(wx.StaticText):
 		wx.StaticText.SetLabel(self, self._full_label)
 		if width > 0:
 			self.Wrap(width)
-			self._wrapped_width = width
+		# Recorded even for an unwrapped zero width: macOS sends EVT_SIZE on every Layout, even when
+		# nothing changed, so leaving this unset would make _on_size reschedule _rewrap forever.
+		self._wrapped_width = width
 		self.InvalidateBestSize()
 		self.GetParent().Layout()
 

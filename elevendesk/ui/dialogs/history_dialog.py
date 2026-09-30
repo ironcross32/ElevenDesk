@@ -192,4 +192,4 @@ class HistoryDialog(wx.Dialog):
 		wx.CallAfter(self._remove_item, item)
 
 	def _remove_item(self, item):
-		self.history_list.delete_item(item)
+		lists.delete_item(self.history_list, item)
