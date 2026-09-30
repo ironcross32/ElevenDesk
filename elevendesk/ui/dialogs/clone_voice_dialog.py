@@ -8,6 +8,8 @@ from sound_lib.main import BassError
 from elevendesk import api
 from elevendesk import constants
 from elevendesk import playback
+from elevendesk import usage
+from elevendesk.ui import lists
 from elevendesk.ui.status_text import StatusText
 
 
@@ -20,6 +22,8 @@ class CloneVoiceDialog(wx.Dialog):
 		self.name_input = wx.TextCtrl(self, name=constants.LABEL_VOICE_NAME)
 		self.description_label = wx.StaticText(self, label=constants.COLUMN_DESCRIPTION)
 		self.description_input = wx.TextCtrl(self, name=constants.COLUMN_DESCRIPTION)
+		self.help_text = wx.StaticText(self, label=constants.LABEL_CLONE_HELP)
+		self.help_text.Wrap(self.GetClientSize().width)
 		self.files_label = wx.StaticText(self, label=constants.LABEL_AUDIO_FILES)
 		self.files_list = SmartList(parent=self, name=constants.LABEL_AUDIO_FILES)
 		self.files_list.set_columns([
@@ -45,6 +49,11 @@ class CloneVoiceDialog(wx.Dialog):
 		)
 		self.remove_label = wx.StaticText(self, label=constants.LABEL_REMOVE_FILE)
 		self.remove_button = wx.Button(self, label=constants.LABEL_REMOVE_FILE, name=constants.LABEL_REMOVE_FILE)
+		self.noise_checkbox = wx.CheckBox(
+			self,
+			label=constants.LABEL_REMOVE_BACKGROUND_NOISE,
+			name=constants.LABEL_REMOVE_BACKGROUND_NOISE,
+		)
 		self.rights_checkbox = wx.CheckBox(
 			self,
 			label=constants.LABEL_VOICE_RIGHTS_CONFIRMATION,
@@ -71,6 +80,7 @@ class CloneVoiceDialog(wx.Dialog):
 		self.clone_button.Bind(wx.EVT_BUTTON, self._on_clone)
 		self.Bind(wx.EVT_TIMER, self._on_progress_timer, self.progress_timer)
 		self.Bind(wx.EVT_CLOSE, self._on_close)
+		self.Bind(wx.EVT_CHAR_HOOK, self._on_key_hook)
 		self._set_tab_order()
 
 	def _layout_controls(self):
@@ -81,6 +91,7 @@ class CloneVoiceDialog(wx.Dialog):
 		):
 			main_sizer.Add(label, constants.SIZER_PROPORTION_NONE, wx.BOTTOM, constants.CONTROL_GAP)
 			main_sizer.Add(control, constants.SIZER_PROPORTION_NONE, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
+		main_sizer.Add(self.help_text, constants.SIZER_PROPORTION_NONE, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
 		main_sizer.Add(self.files_label, constants.SIZER_PROPORTION_NONE, wx.BOTTOM, constants.CONTROL_GAP)
 		main_sizer.Add(self.files_list.control.control, constants.SIZER_PROPORTION_EXPAND, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
 		button_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -93,11 +104,18 @@ class CloneVoiceDialog(wx.Dialog):
 			button_sizer.Add(label, constants.SIZER_PROPORTION_NONE, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, constants.CONTROL_GAP)
 			button_sizer.Add(button, constants.SIZER_PROPORTION_NONE, wx.RIGHT, constants.SECTION_GAP)
 		main_sizer.Add(button_sizer, constants.SIZER_PROPORTION_NONE, wx.BOTTOM, constants.SECTION_GAP)
+		main_sizer.Add(self.noise_checkbox, constants.SIZER_PROPORTION_NONE, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
 		main_sizer.Add(self.rights_checkbox, constants.SIZER_PROPORTION_NONE, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
 		main_sizer.Add(self.progress_label, constants.SIZER_PROPORTION_NONE, wx.BOTTOM, constants.CONTROL_GAP)
 		main_sizer.Add(self.progress_gauge, constants.SIZER_PROPORTION_NONE, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
 		main_sizer.Add(self.status_text, constants.SIZER_PROPORTION_NONE, wx.EXPAND)
 		self.SetSizer(main_sizer)
+
+	def _on_key_hook(self, event):
+		if event.GetKeyCode() == wx.WXK_ESCAPE:
+			self.Close()
+			return
+		event.Skip()
 
 	def _set_tab_order(self):
 		files_widget = self.files_list.control.control
@@ -106,7 +124,8 @@ class CloneVoiceDialog(wx.Dialog):
 		self.add_button.MoveAfterInTabOrder(files_widget)
 		self.add_directory_button.MoveAfterInTabOrder(self.add_button)
 		self.remove_button.MoveAfterInTabOrder(self.add_directory_button)
-		self.rights_checkbox.MoveAfterInTabOrder(self.remove_button)
+		self.noise_checkbox.MoveAfterInTabOrder(self.remove_button)
+		self.rights_checkbox.MoveAfterInTabOrder(self.noise_checkbox)
 		self.clone_button.MoveAfterInTabOrder(self.rights_checkbox)
 
 	def _on_add(self, event):
@@ -175,7 +194,7 @@ class CloneVoiceDialog(wx.Dialog):
 		self._update_clone_button()
 
 	def _on_remove(self, event):
-		item = self.files_list.get_selected_item()
+		item = lists.get_selected_item(self.files_list)
 		if item is not None:
 			self.audio_files.remove(item)
 			self.files_list.delete_item(item)
@@ -212,7 +231,12 @@ class CloneVoiceDialog(wx.Dialog):
 		self.status_text.SetLabel(constants.STATUS_CLONING_FILES_TEMPLATE.format(len(file_paths)))
 		threading.Thread(
 			target=self._clone_worker,
-			args=(name, self.description_input.GetValue().strip(), file_paths),
+			args=(
+				name,
+				self.description_input.GetValue().strip(),
+				file_paths,
+				self.noise_checkbox.IsChecked(),
+			),
 			daemon=constants.THREAD_DAEMON,
 		).start()
 
@@ -225,6 +249,7 @@ class CloneVoiceDialog(wx.Dialog):
 			self.add_button,
 			self.add_directory_button,
 			self.remove_button,
+			self.noise_checkbox,
 			self.rights_checkbox,
 		):
 			control.Enable(not is_cloning)
@@ -251,15 +276,16 @@ class CloneVoiceDialog(wx.Dialog):
 			return
 		event.Skip()
 
-	def _clone_worker(self, name, description, file_paths):
+	def _clone_worker(self, name, description, file_paths, remove_background_noise):
 		try:
-			voice = api.clone_voice(name, description, file_paths)
+			voice = api.clone_voice(name, description, file_paths, remove_background_noise)
 		except (OSError, api.ElevenDeskAPIError) as error:
 			wx.CallAfter(self._clone_failed, str(error))
 			return
 		wx.CallAfter(self._clone_succeeded, voice)
 
 	def _clone_succeeded(self, voice):
+		usage.refresh()
 		self.is_cloning = False
 		self.progress_timer.Stop()
 		self.progress_gauge.SetValue(constants.PROGRESS_COMPLETE)

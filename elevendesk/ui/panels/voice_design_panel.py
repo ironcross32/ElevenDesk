@@ -4,6 +4,7 @@ import wx
 
 from elevendesk import api
 from elevendesk import constants
+from elevendesk import usage
 from elevendesk.ui.status_text import StatusText
 
 
@@ -96,6 +97,7 @@ class VoiceDesignPanel(wx.Panel):
 		wx.CallAfter(self._design_succeeded, voice)
 
 	def _design_succeeded(self, voice):
+		usage.refresh()
 		self.designed_voice = voice
 		self.design_button.Enable()
 		self.add_button.Enable()

@@ -6,6 +6,7 @@ from smart_list import Column, SmartList
 from elevendesk import api
 from elevendesk import constants
 from elevendesk import playback
+from elevendesk.ui import lists
 from elevendesk.ui.status_text import StatusText
 
 
@@ -37,7 +38,14 @@ class HistoryDialog(wx.Dialog):
 		self.play_button.Bind(wx.EVT_BUTTON, self._on_play)
 		self.save_button.Bind(wx.EVT_BUTTON, self._on_save)
 		self.delete_button.Bind(wx.EVT_BUTTON, self._on_delete)
+		self.Bind(wx.EVT_CHAR_HOOK, self._on_key_hook)
 		threading.Thread(target=self._load_worker, daemon=constants.THREAD_DAEMON).start()
+
+	def _on_key_hook(self, event):
+		if event.GetKeyCode() == wx.WXK_ESCAPE:
+			self.Close()
+			return
+		event.Skip()
 
 	def _layout_controls(self):
 		main_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -68,7 +76,7 @@ class HistoryDialog(wx.Dialog):
 		self.status_text.SetLabel(constants.STATUS_READY)
 
 	def _selected_item(self):
-		item = self.history_list.get_selected_item()
+		item = lists.get_selected_item(self.history_list)
 		if item is None:
 			self.status_text.ReportFailure(constants.ERROR_SELECTION_REQUIRED)
 		return item

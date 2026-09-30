@@ -6,7 +6,9 @@ from smart_list import Column, SmartList
 from elevendesk import api
 from elevendesk import constants
 from elevendesk import playback
+from elevendesk import usage
 from elevendesk.ui import choices
+from elevendesk.ui import lists
 from elevendesk.ui.status_text import StatusText
 
 
@@ -106,6 +108,13 @@ class VoiceLibraryDialog(wx.Dialog):
 		self.use_button.Bind(wx.EVT_BUTTON, self._on_use)
 		self.load_more_button.Bind(wx.EVT_BUTTON, self._on_load_more)
 		self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy)
+		self.Bind(wx.EVT_CHAR_HOOK, self._on_key_hook)
+
+	def _on_key_hook(self, event):
+		if event.GetKeyCode() == wx.WXK_ESCAPE:
+			self.Close()
+			return
+		event.Skip()
 
 	def _set_tab_order(self):
 		controls = (
@@ -252,7 +261,7 @@ class VoiceLibraryDialog(wx.Dialog):
 		self.status_text.SetLabel(constants.STATUS_VOICES_LOADED_TEMPLATE.format(len(visible)))
 
 	def _get_selected_voice(self):
-		voice = self.voice_list.get_selected_item()
+		voice = lists.get_selected_item(self.voice_list)
 		if voice is None:
 			self.status_text.ReportFailure(constants.ERROR_SELECTION_REQUIRED)
 		return voice
@@ -290,8 +299,10 @@ class VoiceLibraryDialog(wx.Dialog):
 			self.status_text.ReportFailure(message)
 
 	def _play_preview(self, voice, audio_bytes):
-		self.preview_thread = playback.play_audio(audio_bytes, constants.PREVIEW_OUTPUT_FORMAT)
-		self.status_text.SetLabel(constants.STATUS_PLAYING_PREVIEW_TEMPLATE.format(voice[constants.KEY_NAME]))
+		on_finished = self.status_text.ShowPlayback(
+			constants.STATUS_PLAYING_PREVIEW_TEMPLATE.format(voice[constants.KEY_NAME])
+		)
+		self.preview_thread = playback.play_audio(audio_bytes, constants.PREVIEW_OUTPUT_FORMAT, on_finished)
 
 	def _on_stop(self, event):
 		playback.stop_audio()
@@ -324,6 +335,7 @@ class VoiceLibraryDialog(wx.Dialog):
 		except api.ElevenDeskAPIError as error:
 			wx.CallAfter(self._add_voice_failed, str(error))
 			return
+		usage.refresh()
 		wx.CallAfter(self._use_voice, voice_id)
 
 	def _add_voice_failed(self, message):

@@ -1,4 +1,5 @@
 import os
+import threading
 
 import wx
 
@@ -9,11 +10,12 @@ from elevendesk.ui import choices
 
 
 class SettingsDialog(wx.Dialog):
-	def __init__(self, parent, models):
+	def __init__(self, parent, models, models_placeholder):
 		wx.Dialog.__init__(self, parent, title=constants.TITLE_PREFERENCES, size=constants.SMALL_DIALOG_SIZE)
 		self.saved = False
 		self.settings = config.load_config()
 		self.models = models
+		self.models_placeholder = models_placeholder
 		self._create_controls()
 		self._layout_controls()
 		self._bind_events()
@@ -23,11 +25,7 @@ class SettingsDialog(wx.Dialog):
 		self.api_key_label = wx.StaticText(self, label=constants.LABEL_API_KEY)
 		self.api_key_input = wx.TextCtrl(self, style=wx.TE_PASSWORD, name=constants.LABEL_API_KEY)
 		self.model_label = wx.StaticText(self, label=constants.LABEL_DEFAULT_MODEL)
-		self.model_combo = choices.create_choice(
-			self,
-			choices=[model[constants.KEY_NAME] for model in self.models],
-			name=constants.LABEL_DEFAULT_MODEL,
-		)
+		self.model_combo = choices.create_choice(self, name=constants.LABEL_DEFAULT_MODEL)
 		self.voice_id_label = wx.StaticText(self, label=constants.LABEL_DEFAULT_VOICE_ID)
 		self.voice_id_input = wx.TextCtrl(self, name=constants.LABEL_DEFAULT_VOICE_ID)
 		self.format_label = wx.StaticText(self, label=constants.LABEL_DEFAULT_OUTPUT_FORMAT)
@@ -75,7 +73,10 @@ class SettingsDialog(wx.Dialog):
 		self.api_key_input.SetValue(self.settings[constants.KEY_API_KEY])
 		self.voice_id_input.SetValue(self.settings[constants.KEY_DEFAULT_VOICE_ID])
 		self.output_directory_input.SetValue(self.settings[constants.KEY_OUTPUT_DIRECTORY])
-		choices.select_model(self.model_combo, self.models, self.settings[constants.KEY_DEFAULT_MODEL])
+		if self.models:
+			choices.set_model_choices(self.model_combo, self.models, self.settings[constants.KEY_DEFAULT_MODEL])
+		else:
+			choices.show_placeholder(self.model_combo, self.models_placeholder)
 		self._select_combo(self.format_combo, self.settings[constants.KEY_DEFAULT_OUTPUT_FORMAT])
 
 	def _select_combo(self, combo, value):
@@ -94,13 +95,52 @@ class SettingsDialog(wx.Dialog):
 				self.output_directory_input.SetValue(dialog.GetPath())
 
 	def _on_save(self, event):
+		api_key = self.api_key_input.GetValue().strip()
+		if api_key and api_key != self.settings[constants.KEY_API_KEY]:
+			self._set_verifying(True)
+			threading.Thread(target=self._verify_worker, args=(api_key,), daemon=constants.THREAD_DAEMON).start()
+			return
+		self._save_settings()
+
+	def _set_verifying(self, verifying):
+		self.save_button.SetLabel(constants.LABEL_VERIFYING_API_KEY if verifying else constants.LABEL_SAVE)
+		self.save_button.Enable(not verifying)
+		self.cancel_button.Enable(not verifying)
+
+	def _verify_worker(self, api_key):
+		try:
+			api.validate_api_key(api_key)
+		except api.ElevenDeskAPIError as error:
+			wx.CallAfter(self._verification_finished, str(error))
+			return
+		wx.CallAfter(self._verification_finished, None)
+
+	def _verification_finished(self, error_message):
+		if not self:
+			return
+		self._set_verifying(False)
+		if error_message:
+			wx.MessageBox(
+				constants.ERROR_DETAIL_TEMPLATE.format(constants.ERROR_API_KEY_INVALID, error_message),
+				constants.TITLE_ERROR,
+				wx.OK | wx.ICON_ERROR,
+				self,
+			)
+			self.api_key_input.SetFocus()
+			return
+		self._save_settings()
+
+	def _save_settings(self):
 		output_directory = self.output_directory_input.GetValue().strip()
 		if output_directory:
 			os.makedirs(output_directory, exist_ok=True)
 		settings = config.load_config()
+		# With no models loaded the list shows a placeholder, so keep the saved default model.
+		model_id = choices.get_selected_model_id(self.model_combo, self.models)
+		if model_id:
+			settings[constants.KEY_DEFAULT_MODEL] = model_id
 		settings.update({
 			constants.KEY_API_KEY: self.api_key_input.GetValue().strip(),
-			constants.KEY_DEFAULT_MODEL: choices.get_selected_model_id(self.model_combo, self.models),
 			constants.KEY_DEFAULT_VOICE_ID: self.voice_id_input.GetValue().strip(),
 			constants.KEY_DEFAULT_OUTPUT_FORMAT: self.format_combo.GetStringSelection(),
 			constants.KEY_OUTPUT_DIRECTORY: output_directory,

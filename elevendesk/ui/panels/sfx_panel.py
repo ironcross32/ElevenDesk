@@ -5,6 +5,7 @@ import wx
 from elevendesk import api
 from elevendesk import constants
 from elevendesk import playback
+from elevendesk import usage
 from elevendesk.ui.status_text import StatusText
 
 
@@ -106,6 +107,7 @@ class SoundEffectsPanel(wx.Panel):
 		wx.CallAfter(self._generation_succeeded, audio_bytes)
 
 	def _generation_succeeded(self, audio_bytes):
+		usage.refresh()
 		self.last_audio = audio_bytes
 		self.generate_button.Enable()
 		self.play_button.Enable()
@@ -118,8 +120,11 @@ class SoundEffectsPanel(wx.Panel):
 
 	def _on_play(self, event):
 		if self.last_audio:
-			playback.play_audio(self.last_audio, self.last_output_format)
-			self.status_text.SetLabel(constants.STATUS_PLAYING)
+			playback.play_audio(
+				self.last_audio,
+				self.last_output_format,
+				on_finished=self.status_text.ShowPlayback(constants.STATUS_PLAYING),
+			)
 
 	def _on_save(self, event):
 		self.GetTopLevelParent().save_audio_bytes(self.last_audio, self.last_output_format, self.status_text)

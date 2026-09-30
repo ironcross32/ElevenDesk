@@ -6,6 +6,7 @@ from elevendesk import api
 from elevendesk import config
 from elevendesk import constants
 from elevendesk import playback
+from elevendesk import usage
 from elevendesk.ui import choices
 from elevendesk.ui.status_text import StatusText
 
@@ -14,7 +15,7 @@ class SpeechToSpeechPanel(wx.Panel):
 	def __init__(self, parent):
 		wx.Panel.__init__(self, parent)
 		self.voices = []
-		self.models = api.models_from_ids(constants.FALLBACK_STS_MODEL_IDS)
+		self.models = []
 		self.selected_file_path = constants.EMPTY_TEXT
 		self.last_audio = None
 		self.last_output_format = constants.DEFAULT_OUTPUT_FORMAT
@@ -41,11 +42,7 @@ class SpeechToSpeechPanel(wx.Panel):
 		self.voice_label = wx.StaticText(self, label=constants.LABEL_VOICE)
 		self.voice_combo = choices.create_choice(self, name=constants.LABEL_VOICE)
 		self.model_label = wx.StaticText(self, label=constants.LABEL_MODEL)
-		self.model_combo = choices.create_choice(
-			self,
-			choices=[model[constants.KEY_NAME] for model in self.models],
-			name=constants.LABEL_MODEL,
-		)
+		self.model_combo = choices.create_choice(self, name=constants.LABEL_MODEL)
 		self.output_format_label = wx.StaticText(self, label=constants.LABEL_OUTPUT_FORMAT)
 		self.output_format_combo = choices.create_choice(
 			self,
@@ -106,13 +103,15 @@ class SpeechToSpeechPanel(wx.Panel):
 
 	def _bind_events(self):
 		self.open_button.Bind(wx.EVT_BUTTON, self._on_open)
+		choices.bind_selection(self.model_combo, self._on_model_selected)
 		self.convert_button.Bind(wx.EVT_BUTTON, self._on_convert)
 		self.play_button.Bind(wx.EVT_BUTTON, self._on_play)
 		self.save_button.Bind(wx.EVT_BUTTON, self._on_save)
 
 	def _apply_defaults(self):
 		settings = config.load_config()
-		choices.select_model(self.model_combo, self.models, settings[constants.KEY_DEFAULT_STS_MODEL])
+		self.requested_model_id = settings[constants.KEY_DEFAULT_STS_MODEL]
+		choices.select_model(self.model_combo, self.models, self.requested_model_id)
 		self._select_combo(self.output_format_combo, settings[constants.KEY_DEFAULT_OUTPUT_FORMAT])
 
 	def _select_combo(self, combo, value):
@@ -123,15 +122,33 @@ class SpeechToSpeechPanel(wx.Panel):
 			combo.SetSelection(selection)
 
 	def set_models(self, models):
-		selected_model_id = choices.get_selected_model_id(self.model_combo, self.models)
 		self.models = models
-		choices.set_model_choices(
-			self.model_combo,
-			self.models,
-			selected_model_id or config.load_config()[constants.KEY_DEFAULT_STS_MODEL],
-		)
+		choices.set_model_choices(self.model_combo, self.models, self.requested_model_id)
+		self._update_action_state()
+
+	def show_models_placeholder(self, text):
+		self.models = []
+		choices.show_placeholder(self.model_combo, text)
+		self._update_action_state()
+
+	def _on_model_selected(self, event):
+		model_id = choices.get_selected_model_id(self.model_combo, self.models)
+		if model_id:
+			self.requested_model_id = model_id
+
+	def _update_action_state(self):
+		self.convert_button.Enable(bool(self.selected_file_path) and bool(self.models) and bool(self.voices))
+
+	def _show_voices_placeholder(self, text):
+		self.voices = []
+		choices.show_placeholder(self.voice_combo, text)
+		self._update_action_state()
 
 	def refresh_voices(self, preferred_voice_id=None):
+		if not config.load_config()[constants.KEY_API_KEY]:
+			self._show_voices_placeholder(constants.PLACEHOLDER_NO_API_KEY)
+			return
+		self._show_voices_placeholder(constants.PLACEHOLDER_LOADING)
 		self.status_text.SetLabel(constants.STATUS_LOADING_VOICES)
 		threading.Thread(
 			target=self._load_voices_worker,
@@ -143,9 +160,13 @@ class SpeechToSpeechPanel(wx.Panel):
 		try:
 			voices = api.get_voices()
 		except api.ElevenDeskAPIError as error:
-			wx.CallAfter(self.status_text.ReportFailure, str(error))
+			wx.CallAfter(self._show_voice_error, str(error))
 			return
 		wx.CallAfter(self._set_voices, voices, preferred_voice_id)
+
+	def _show_voice_error(self, message):
+		self._show_voices_placeholder(constants.ERROR_LOAD_VOICES)
+		self.status_text.ReportFailure(message)
 
 	def _set_voices(self, voices, preferred_voice_id):
 		self.voices = voices
@@ -160,6 +181,7 @@ class SpeechToSpeechPanel(wx.Panel):
 				break
 		if self.voice_combo.GetSelection() == wx.NOT_FOUND and self.voice_combo.GetCount():
 			self.voice_combo.SetSelection(constants.FIRST_ITEM_INDEX)
+		self._update_action_state()
 		self.status_text.SetLabel(constants.STATUS_READY)
 
 	def _on_open(self, event):
@@ -173,13 +195,13 @@ class SpeechToSpeechPanel(wx.Panel):
 				return
 			self.selected_file_path = dialog.GetPath()
 		self.selected_file.SetValue(self.selected_file_path)
-		self.convert_button.Enable()
+		self._update_action_state()
 
 	def _on_convert(self, event):
 		if not self.selected_file_path:
 			self.status_text.ReportFailure(constants.ERROR_AUDIO_REQUIRED)
 			return
-		voice_index = self.voice_combo.GetSelection()
+		voice_index = choices.get_selected_index(self.voice_combo, self.voices)
 		if voice_index == wx.NOT_FOUND:
 			self.status_text.ReportFailure(constants.ERROR_VOICE_REQUIRED)
 			return
@@ -214,22 +236,29 @@ class SpeechToSpeechPanel(wx.Panel):
 		wx.CallAfter(self._conversion_succeeded, result, output_format)
 
 	def _conversion_succeeded(self, audio_bytes, output_format):
+		usage.refresh()
 		self.last_audio = audio_bytes
 		self.last_output_format = output_format
-		self.convert_button.Enable()
+		self._update_action_state()
 		self.play_button.Enable()
 		self.save_button.Enable()
-		playback.play_audio(self.last_audio, self.last_output_format)
-		self.status_text.SetLabel(constants.STATUS_PLAYING)
+		playback.play_audio(
+			self.last_audio,
+			self.last_output_format,
+			on_finished=self.status_text.ShowPlayback(constants.STATUS_PLAYING),
+		)
 
 	def _conversion_failed(self, message):
-		self.convert_button.Enable()
+		self._update_action_state()
 		self.status_text.ReportFailure(message)
 
 	def _on_play(self, event):
 		if self.last_audio:
-			playback.play_audio(self.last_audio, self.last_output_format)
-			self.status_text.SetLabel(constants.STATUS_PLAYING)
+			playback.play_audio(
+				self.last_audio,
+				self.last_output_format,
+				on_finished=self.status_text.ShowPlayback(constants.STATUS_PLAYING),
+			)
 
 	def _on_save(self, event):
 		self.save_last_output()

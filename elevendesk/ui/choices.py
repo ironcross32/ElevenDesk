@@ -18,6 +18,25 @@ def create_choice(parent, choices=None, name=None, **kwargs):
 	return widget
 
 
+def bind_selection(widget, handler):
+	event_type = wx.EVT_CHOICE if isinstance(widget, wx.Choice) else wx.EVT_COMBOBOX
+	widget.Bind(event_type, handler)
+
+
+def show_placeholder(combo, text):
+	# A single explanatory entry keeps the list focusable so screen readers announce why it is empty.
+	combo.Clear()
+	combo.Append(text)
+	combo.SetSelection(constants.FIRST_ITEM_INDEX)
+
+
+def get_selected_index(combo, items):
+	index = combo.GetSelection()
+	if index == wx.NOT_FOUND or index >= len(items):
+		return wx.NOT_FOUND
+	return index
+
+
 def set_model_choices(combo, models, selected_model_id):
 	combo.Clear()
 	for model in models:
@@ -35,7 +54,7 @@ def select_model(combo, models, model_id):
 
 
 def get_selected_model_id(combo, models):
-	index = combo.GetSelection()
+	index = get_selected_index(combo, models)
 	if index == wx.NOT_FOUND:
 		return constants.EMPTY_TEXT
 	return models[index][constants.KEY_ID]

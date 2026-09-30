@@ -2,7 +2,7 @@ import datetime
 
 from elevenlabs.client import ElevenLabs
 from elevenlabs.core import ApiError
-from elevenlabs.types import VoiceSettings
+from elevenlabs.types import PronunciationDictionaryVersionLocator, VoiceSettings
 import httpx
 
 from elevendesk import config
@@ -214,8 +214,16 @@ def get_voice_preview(preview_url):
 	return response.content
 
 
-def get_models():
-	client = get_client()
+def validate_api_key(api_key):
+	try:
+		client = ElevenLabs(api_key=api_key)
+	except (TypeError, ValueError) as error:
+		raise ElevenDeskAPIError(str(error)) from error
+	get_models(client)
+
+
+def get_models(client=None):
+	client = client or get_client()
 	response = _call_sdk(
 		_get_sdk_method(client, constants.API_ATTR_MODELS, constants.API_ATTR_LIST),
 		{},
@@ -234,45 +242,83 @@ def get_models():
 	return models
 
 
+def get_subscription():
+	client = get_client()
+	user_section = _get_sdk_section(client, constants.API_ATTR_USER)
+	response = _call_sdk(
+		_get_sdk_method(user_section, constants.API_ATTR_SUBSCRIPTION, constants.API_ATTR_GET),
+		{},
+	)
+	overage = _get_attribute(response, constants.API_ATTR_CURRENT_OVERAGE, None)
+	next_invoice = _get_attribute(response, constants.API_ATTR_NEXT_INVOICE, None)
+	return {
+		constants.KEY_TIER: str(_get_attribute(response, constants.API_ATTR_TIER, constants.EMPTY_TEXT) or constants.EMPTY_TEXT),
+		constants.KEY_SUBSCRIPTION_STATUS: str(_get_attribute(response, constants.API_ATTR_STATUS, constants.EMPTY_TEXT) or constants.EMPTY_TEXT),
+		constants.KEY_CHARACTER_COUNT: _get_attribute(response, constants.API_ATTR_CHARACTER_COUNT, 0) or 0,
+		constants.KEY_CHARACTER_LIMIT: _get_attribute(response, constants.API_ATTR_CHARACTER_LIMIT, 0) or 0,
+		constants.KEY_NEXT_RESET_UNIX: _get_attribute(response, constants.API_ATTR_NEXT_RESET_UNIX, None),
+		constants.KEY_CHARACTER_REFRESH_PERIOD: _get_attribute(response, constants.API_ATTR_CHARACTER_REFRESH_PERIOD, None),
+		constants.KEY_BILLING_PERIOD: _get_attribute(response, constants.API_ATTR_BILLING_PERIOD, None),
+		constants.KEY_VOICE_SLOTS_USED: _get_attribute(response, constants.API_ATTR_VOICE_SLOTS_USED, 0) or 0,
+		constants.KEY_VOICE_LIMIT: _get_attribute(response, constants.API_ATTR_VOICE_LIMIT, 0) or 0,
+		constants.KEY_PROFESSIONAL_VOICE_SLOTS_USED: _get_attribute(response, constants.API_ATTR_PROFESSIONAL_VOICE_SLOTS_USED, 0) or 0,
+		constants.KEY_PROFESSIONAL_VOICE_LIMIT: _get_attribute(response, constants.API_ATTR_PROFESSIONAL_VOICE_LIMIT, 0) or 0,
+		constants.KEY_VOICE_ADD_EDITS_USED: _get_attribute(response, constants.API_ATTR_VOICE_ADD_EDIT_COUNTER, 0) or 0,
+		constants.KEY_MAX_VOICE_ADD_EDITS: _get_attribute(response, constants.API_ATTR_MAX_VOICE_ADD_EDITS, None),
+		constants.KEY_CAN_USE_INSTANT_CLONING: bool(_get_attribute(response, constants.API_ATTR_CAN_USE_INSTANT_CLONING, False)),
+		constants.KEY_CAN_USE_PROFESSIONAL_CLONING: bool(_get_attribute(response, constants.API_ATTR_CAN_USE_PROFESSIONAL_CLONING, False)),
+		constants.KEY_OVERAGE_AMOUNT: _get_attribute(overage, constants.API_ATTR_AMOUNT, None) if overage else None,
+		constants.KEY_OVERAGE_CURRENCY: str(_get_attribute(overage, constants.API_ATTR_CURRENCY, constants.EMPTY_TEXT) or constants.EMPTY_TEXT) if overage else constants.EMPTY_TEXT,
+		constants.KEY_NEXT_INVOICE_CENTS: _get_attribute(next_invoice, constants.API_ATTR_AMOUNT_DUE_CENTS, None) if next_invoice else None,
+		constants.KEY_NEXT_INVOICE_UNIX: _get_attribute(next_invoice, constants.API_ATTR_NEXT_PAYMENT_ATTEMPT_UNIX, None) if next_invoice else None,
+		constants.KEY_CURRENCY: str(_get_attribute(response, constants.API_ATTR_CURRENCY, constants.EMPTY_TEXT) or constants.EMPTY_TEXT),
+	}
+
+
 def models_from_ids(model_ids):
 	return [{constants.KEY_ID: model_id, constants.KEY_NAME: model_id} for model_id in model_ids]
 
 
 def filter_tts_models(models):
-	tts_models = [model for model in models if model[constants.KEY_CAN_DO_TTS]]
-	return tts_models or models_from_ids(constants.FALLBACK_TTS_MODEL_IDS)
+	return [model for model in models if model[constants.KEY_CAN_DO_TTS]]
 
 
 def filter_sts_models(models):
-	sts_models = [model for model in models if model[constants.KEY_CAN_DO_STS]]
-	return sts_models or models_from_ids(constants.FALLBACK_STS_MODEL_IDS)
+	return [model for model in models if model[constants.KEY_CAN_DO_STS]]
 
 
 def filter_stt_models(models):
 	# The models endpoint does not reliably list Scribe models, so always keep the known ones.
 	stt_models = [model for model in models if model[constants.KEY_ID].startswith(constants.MODEL_STT_PREFIX)]
 	known_ids = {model[constants.KEY_ID] for model in stt_models}
-	for fallback_model in models_from_ids(constants.FALLBACK_STT_MODEL_IDS):
-		if fallback_model[constants.KEY_ID] not in known_ids:
-			stt_models.append(fallback_model)
+	for known_model in models_from_ids(constants.KNOWN_STT_MODEL_IDS):
+		if known_model[constants.KEY_ID] not in known_ids:
+			stt_models.append(known_model)
 	return stt_models
 
 
-def text_to_speech(text, voice_id, model_id, voice_settings, output_format):
+def text_to_speech(text, voice_id, model_id, voice_settings, output_format, pronunciation_dictionary_ids=()):
 	client = get_client()
 	try:
 		sdk_voice_settings = VoiceSettings(**voice_settings)
 	except (TypeError, ValueError) as error:
 		raise ElevenDeskAPIError(str(error)) from error
+	keyword_arguments = {
+		constants.API_KW_TEXT: text,
+		constants.API_KW_VOICE_ID: voice_id,
+		constants.API_KW_MODEL_ID: model_id,
+		constants.API_KW_VOICE_SETTINGS: sdk_voice_settings,
+		constants.API_KW_OUTPUT_FORMAT: output_format,
+	}
+	if pronunciation_dictionary_ids:
+		# Leaving out the version ID makes the API apply each dictionary's latest rules.
+		keyword_arguments[constants.API_KW_PRONUNCIATION_DICTIONARY_LOCATORS] = [
+			PronunciationDictionaryVersionLocator(pronunciation_dictionary_id=dictionary_id)
+			for dictionary_id in pronunciation_dictionary_ids
+		]
 	response = _call_sdk(
 		_get_sdk_method(client, constants.API_ATTR_TEXT_TO_SPEECH, constants.API_ATTR_CONVERT),
-		{
-			constants.API_KW_TEXT: text,
-			constants.API_KW_VOICE_ID: voice_id,
-			constants.API_KW_MODEL_ID: model_id,
-			constants.API_KW_VOICE_SETTINGS: sdk_voice_settings,
-			constants.API_KW_OUTPUT_FORMAT: output_format,
-		},
+		keyword_arguments,
 	)
 	return _join_audio_chunks(response)
 
@@ -348,7 +394,7 @@ def design_voice(prompt, name):
 	}
 
 
-def clone_voice(name, description, file_paths):
+def clone_voice(name, description, file_paths, remove_background_noise=False):
 	if len(file_paths) > constants.CLONE_MAX_AUDIO_FILES:
 		raise ElevenDeskAPIError(
 			constants.ERROR_CLONE_FILE_LIMIT_TEMPLATE.format(constants.CLONE_MAX_AUDIO_FILES)
@@ -366,6 +412,9 @@ def clone_voice(name, description, file_paths):
 				constants.API_KW_NAME: name,
 				constants.API_KW_DESCRIPTION: description,
 				constants.API_KW_FILES: opened_files,
+				constants.API_KW_REMOVE_BACKGROUND_NOISE: remove_background_noise,
+				# The SDK serializes omitted labels as "null", which the API rejects.
+				constants.API_KW_LABELS: {},
 			},
 		)
 	except (AttributeError, OSError) as error:
@@ -423,22 +472,155 @@ def delete_history_item(history_item_id):
 	)
 
 
+def _get_pronunciation_method(method_name):
+	return _get_sdk_method(get_client(), constants.API_ATTR_PRONUNCIATION, method_name)
+
+
+def _get_rules_method(method_name):
+	pronunciation_client = _get_sdk_section(get_client(), constants.API_ATTR_PRONUNCIATION)
+	return _get_sdk_method(pronunciation_client, constants.API_ATTR_RULES, method_name)
+
+
+def _format_dictionary(item):
+	# Listing and fetching name the version fields "latest_version_*"; creating names them "version_*".
+	version_id = _get_attribute(item, constants.API_ATTR_LATEST_VERSION_ID, None)
+	if not version_id:
+		version_id = _get_attribute(item, constants.API_ATTR_VERSION_ID, constants.EMPTY_TEXT)
+	rule_count = _get_attribute(item, constants.API_ATTR_LATEST_VERSION_RULES_NUM, None)
+	if rule_count is None:
+		rule_count = _get_attribute(item, constants.API_ATTR_VERSION_RULES_NUM, 0)
+	return {
+		constants.KEY_ID: _get_attribute(item, constants.API_ATTR_ID, constants.EMPTY_TEXT),
+		constants.KEY_NAME: _get_attribute(item, constants.API_ATTR_NAME, constants.EMPTY_TEXT),
+		constants.KEY_DESCRIPTION: _get_attribute(item, constants.API_ATTR_DESCRIPTION, constants.EMPTY_TEXT) or constants.EMPTY_TEXT,
+		constants.KEY_VERSION_ID: version_id or constants.EMPTY_TEXT,
+		constants.KEY_RULE_COUNT: rule_count or 0,
+	}
+
+
+def _format_rule(rule):
+	rule_type = _get_attribute(rule, constants.API_ATTR_RULE_TYPE, constants.EMPTY_TEXT)
+	is_phoneme = rule_type == constants.RULE_TYPE_PHONEME
+	options = []
+	if _get_attribute(rule, constants.API_ATTR_CASE_SENSITIVE, None):
+		options.append(constants.RULE_OPTION_CASE_SENSITIVE)
+	if _get_attribute(rule, constants.API_ATTR_WORD_BOUNDARIES, None):
+		options.append(constants.RULE_OPTION_WORD_BOUNDARIES)
+	return {
+		constants.KEY_STRING_TO_REPLACE: _get_attribute(rule, constants.API_ATTR_STRING_TO_REPLACE, constants.EMPTY_TEXT),
+		constants.KEY_RULE_TYPE: rule_type,
+		constants.KEY_REPLACEMENT: _get_attribute(
+			rule,
+			constants.API_ATTR_PHONEME if is_phoneme else constants.API_ATTR_ALIAS,
+			constants.EMPTY_TEXT,
+		),
+		constants.KEY_ALPHABET: _get_attribute(rule, constants.API_ATTR_ALPHABET, constants.EMPTY_TEXT) if is_phoneme else constants.EMPTY_TEXT,
+		constants.KEY_OPTIONS: constants.DETAILS_SEPARATOR.join(options),
+	}
+
+
+def _build_rule(rule):
+	# rule is a dictionary keyed by the KEY_* rule constants, as produced by the rule dialog.
+	sdk_rule = {
+		constants.API_ATTR_RULE_TYPE: rule[constants.KEY_RULE_TYPE],
+		constants.API_ATTR_STRING_TO_REPLACE: rule[constants.KEY_STRING_TO_REPLACE],
+		constants.API_ATTR_CASE_SENSITIVE: rule[constants.KEY_CASE_SENSITIVE],
+		constants.API_ATTR_WORD_BOUNDARIES: rule[constants.KEY_WORD_BOUNDARIES],
+	}
+	if rule[constants.KEY_RULE_TYPE] == constants.RULE_TYPE_PHONEME:
+		sdk_rule[constants.API_ATTR_PHONEME] = rule[constants.KEY_REPLACEMENT]
+		sdk_rule[constants.API_ATTR_ALPHABET] = rule[constants.KEY_ALPHABET]
+	else:
+		sdk_rule[constants.API_ATTR_ALIAS] = rule[constants.KEY_REPLACEMENT]
+	return sdk_rule
+
+
 def get_pronunciation_dictionaries():
-	client = get_client()
-	pronunciation_client = getattr(client, constants.API_ATTR_PRONUNCIATION, None)
-	if pronunciation_client is None:
-		pronunciation_client = getattr(client, constants.API_ATTR_PRONUNCIATION_DICTIONARY, None)
-	if pronunciation_client is None:
-		raise ElevenDeskAPIError(constants.ERROR_SDK_RESPONSE)
+	response = _call_sdk(_get_pronunciation_method(constants.API_ATTR_LIST), {})
+	return [_format_dictionary(item) for item in _get_collection(response, constants.API_ATTR_DICTIONARIES)]
+
+
+def get_pronunciation_rules(dictionary_id):
 	response = _call_sdk(
-		getattr(pronunciation_client, constants.API_ATTR_LIST),
-		{},
+		_get_pronunciation_method(constants.API_ATTR_GET),
+		{constants.API_KW_PRONUNCIATION_DICTIONARY_ID: dictionary_id},
 	)
-	dictionaries = []
-	for item in _get_collection(response, constants.API_ATTR_DICTIONARIES):
-		dictionaries.append({
-			constants.KEY_ID: _get_attribute(item, constants.API_ATTR_ID, constants.EMPTY_TEXT),
-			constants.KEY_NAME: _get_attribute(item, constants.API_ATTR_NAME, constants.EMPTY_TEXT),
-			constants.KEY_DESCRIPTION: _get_attribute(item, constants.API_ATTR_DESCRIPTION, constants.EMPTY_TEXT) or constants.EMPTY_TEXT,
-		})
-	return dictionaries
+	return [_format_rule(rule) for rule in _get_collection(response, constants.API_ATTR_RULES)]
+
+
+def create_pronunciation_dictionary(name, description, rule):
+	# The API only creates dictionaries from at least one rule or from a PLS file, never empty ones.
+	keyword_arguments = {
+		constants.API_KW_NAME: name,
+		constants.API_KW_RULES: [_build_rule(rule)],
+	}
+	if description:
+		keyword_arguments[constants.API_KW_DESCRIPTION] = description
+	response = _call_sdk(_get_pronunciation_method(constants.API_ATTR_CREATE_FROM_RULES), keyword_arguments)
+	return _format_dictionary(response)
+
+
+def import_pronunciation_dictionary(name, description, file_path):
+	keyword_arguments = {constants.API_KW_NAME: name}
+	if description:
+		keyword_arguments[constants.API_KW_DESCRIPTION] = description
+	create_from_file = _get_pronunciation_method(constants.API_ATTR_CREATE_FROM_FILE)
+	try:
+		with open(file_path, constants.FILE_MODE_BINARY_READ) as dictionary_file:
+			keyword_arguments[constants.API_KW_FILE] = dictionary_file
+			response = _call_sdk(create_from_file, keyword_arguments)
+	except OSError as error:
+		raise ElevenDeskAPIError(str(error)) from error
+	return _format_dictionary(response)
+
+
+def rename_pronunciation_dictionary(dictionary_id, name):
+	_call_sdk(
+		_get_pronunciation_method(constants.API_ATTR_UPDATE),
+		{
+			constants.API_KW_PRONUNCIATION_DICTIONARY_ID: dictionary_id,
+			constants.API_KW_NAME: name,
+		},
+	)
+
+
+def archive_pronunciation_dictionary(dictionary_id):
+	# The API has no delete endpoint for pronunciation dictionaries; archiving is the only way to remove one.
+	_call_sdk(
+		_get_pronunciation_method(constants.API_ATTR_UPDATE),
+		{
+			constants.API_KW_PRONUNCIATION_DICTIONARY_ID: dictionary_id,
+			constants.API_KW_ARCHIVED: True,
+		},
+	)
+
+
+def download_pronunciation_dictionary(dictionary_id, version_id):
+	response = _call_sdk(
+		_get_pronunciation_method(constants.API_ATTR_DOWNLOAD),
+		{
+			constants.API_KW_DICTIONARY_ID: dictionary_id,
+			constants.API_KW_VERSION_ID: version_id,
+		},
+	)
+	return _join_audio_chunks(response)
+
+
+def add_pronunciation_rule(dictionary_id, rule):
+	_call_sdk(
+		_get_rules_method(constants.API_ATTR_ADD),
+		{
+			constants.API_KW_PRONUNCIATION_DICTIONARY_ID: dictionary_id,
+			constants.API_KW_RULES: [_build_rule(rule)],
+		},
+	)
+
+
+def remove_pronunciation_rule(dictionary_id, string_to_replace):
+	_call_sdk(
+		_get_rules_method(constants.API_ATTR_REMOVE),
+		{
+			constants.API_KW_PRONUNCIATION_DICTIONARY_ID: dictionary_id,
+			constants.API_KW_RULE_STRINGS: [string_to_replace],
+		},
+	)

@@ -5,6 +5,7 @@ import wx
 from elevendesk import api
 from elevendesk import config
 from elevendesk import constants
+from elevendesk import usage
 from elevendesk.ui import choices
 from elevendesk.ui.status_text import StatusText
 
@@ -13,7 +14,7 @@ class SpeechToTextPanel(wx.Panel):
 	def __init__(self, parent):
 		wx.Panel.__init__(self, parent)
 		self.selected_file_path = constants.EMPTY_TEXT
-		self.models = api.models_from_ids(constants.FALLBACK_STT_MODEL_IDS)
+		self.models = []
 		self._create_controls()
 		self._layout_controls()
 		self._bind_events()
@@ -34,11 +35,7 @@ class SpeechToTextPanel(wx.Panel):
 			name=constants.NAME_SELECTED_TRANSCRIPTION_FILE,
 		)
 		self.model_label = wx.StaticText(self, label=constants.LABEL_MODEL)
-		self.model_combo = choices.create_choice(
-			self,
-			choices=[model[constants.KEY_NAME] for model in self.models],
-			name=constants.LABEL_MODEL,
-		)
+		self.model_combo = choices.create_choice(self, name=constants.LABEL_MODEL)
 		self.transcribe_label = wx.StaticText(self, label=constants.LABEL_TRANSCRIBE)
 		self.transcribe_button = wx.Button(
 			self,
@@ -95,21 +92,32 @@ class SpeechToTextPanel(wx.Panel):
 
 	def _bind_events(self):
 		self.open_button.Bind(wx.EVT_BUTTON, self._on_open)
+		choices.bind_selection(self.model_combo, self._on_model_selected)
 		self.transcribe_button.Bind(wx.EVT_BUTTON, self._on_transcribe)
 		self.copy_button.Bind(wx.EVT_BUTTON, self._on_copy)
 		self.save_button.Bind(wx.EVT_BUTTON, self._on_save)
 
 	def _apply_defaults(self):
-		choices.select_model(self.model_combo, self.models, config.load_config()[constants.KEY_DEFAULT_STT_MODEL])
+		self.requested_model_id = config.load_config()[constants.KEY_DEFAULT_STT_MODEL]
+		choices.select_model(self.model_combo, self.models, self.requested_model_id)
 
 	def set_models(self, models):
-		selected_model_id = choices.get_selected_model_id(self.model_combo, self.models)
 		self.models = models
-		choices.set_model_choices(
-			self.model_combo,
-			self.models,
-			selected_model_id or config.load_config()[constants.KEY_DEFAULT_STT_MODEL],
-		)
+		choices.set_model_choices(self.model_combo, self.models, self.requested_model_id)
+		self._update_action_state()
+
+	def show_models_placeholder(self, text):
+		self.models = []
+		choices.show_placeholder(self.model_combo, text)
+		self._update_action_state()
+
+	def _on_model_selected(self, event):
+		model_id = choices.get_selected_model_id(self.model_combo, self.models)
+		if model_id:
+			self.requested_model_id = model_id
+
+	def _update_action_state(self):
+		self.transcribe_button.Enable(bool(self.selected_file_path) and bool(self.models))
 
 	def _on_open(self, event):
 		self.open_audio_file()
@@ -125,7 +133,7 @@ class SpeechToTextPanel(wx.Panel):
 				return
 			self.selected_file_path = dialog.GetPath()
 		self.selected_file.SetValue(self.selected_file_path)
-		self.transcribe_button.Enable()
+		self._update_action_state()
 
 	def _on_transcribe(self, event):
 		if not self.selected_file_path:
@@ -156,14 +164,15 @@ class SpeechToTextPanel(wx.Panel):
 		wx.CallAfter(self._transcription_succeeded, transcript)
 
 	def _transcription_succeeded(self, transcript):
-		self.transcribe_button.Enable()
+		usage.refresh()
+		self._update_action_state()
 		self.transcript_output.SetValue(transcript)
 		self.copy_button.Enable(bool(transcript))
 		self.save_button.Enable(bool(transcript))
 		self.status_text.SetLabel(constants.STATUS_TRANSCRIBED)
 
 	def _transcription_failed(self, message):
-		self.transcribe_button.Enable()
+		self._update_action_state()
 		self.status_text.ReportFailure(message)
 
 	def _on_copy(self, event):

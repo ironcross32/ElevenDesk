@@ -50,6 +50,7 @@ The API key is saved to ElevenDesk's per-user settings file outside the reposito
 - Voice design and cloning
 - Voice library browser
 - Generation history with playback and download
-- Pronunciation dictionary listing
+- Character quota and subscription details (View > Show Usage Data), with a summary in the status line
+- Pronunciation dictionaries: create, import and download PLS files, add and remove alias or phoneme rules, rename, archive, and choose up to three to apply in Text to Speech
 - Recursive audio directory import for voice cloning
 

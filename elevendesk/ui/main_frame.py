@@ -6,11 +6,13 @@ from elevendesk import api
 from elevendesk import config
 from elevendesk import constants
 from elevendesk import playback
+from elevendesk import usage
 from elevendesk.ui.dialogs.audio_devices_dialog import AudioDevicesDialog
 from elevendesk.ui.dialogs.clone_voice_dialog import CloneVoiceDialog
 from elevendesk.ui.dialogs.history_dialog import HistoryDialog
 from elevendesk.ui.dialogs.pronunciation_dialog import PronunciationDialog
 from elevendesk.ui.dialogs.settings_dialog import SettingsDialog
+from elevendesk.ui.dialogs.usage_dialog import UsageDialog
 from elevendesk.ui.dialogs.voice_library_dialog import VoiceLibraryDialog
 from elevendesk.ui.panels.sfx_panel import SoundEffectsPanel
 from elevendesk.ui.panels.stt_panel import SpeechToTextPanel
@@ -23,6 +25,7 @@ class MainFrame(wx.Frame):
 	def __init__(self):
 		wx.Frame.__init__(self, None, title=constants.APP_TITLE, size=constants.FRAME_SIZE)
 		self.non_modal_dialogs = []
+		self.models_placeholder = constants.PLACEHOLDER_NO_API_KEY
 		self._create_menu_bar()
 		self.notebook = wx.Notebook(self, name=constants.APP_TITLE)
 		self.tts_panel = TextToSpeechPanel(self.notebook)
@@ -41,26 +44,38 @@ class MainFrame(wx.Frame):
 
 	def initialize(self):
 		if not config.load_config()[constants.KEY_API_KEY]:
-			preferences_dialog = SettingsDialog(self, self.tts_panel.models)
+			preferences_dialog = SettingsDialog(self, self.tts_panel.models, self.models_placeholder)
 			if preferences_dialog.ShowModal() == wx.ID_OK:
 				self.tts_panel._apply_defaults()
 				self.tts_panel.refresh_voices()
 				self.sts_panel.refresh_voices()
 				self.refresh_models()
 			preferences_dialog.Destroy()
+		if config.load_config()[constants.KEY_API_KEY]:
+			usage.refresh()
 		self.Show()
 		wx.CallAfter(self.tts_panel.focus_text_input)
 
 	def refresh_models(self):
+		if not config.load_config()[constants.KEY_API_KEY]:
+			self._show_models_placeholder(constants.PLACEHOLDER_NO_API_KEY)
+			return
+		self._show_models_placeholder(constants.PLACEHOLDER_LOADING)
 		threading.Thread(target=self._load_models_worker, daemon=constants.THREAD_DAEMON).start()
 
 	def _load_models_worker(self):
 		try:
 			models = api.get_models()
-		except api.ElevenDeskAPIError:
-			# Panels keep their fallback model lists; voice loading already reports API errors.
+		except api.ElevenDeskAPIError as error:
+			# The reason goes in the list itself; voice loading already announces API errors.
+			wx.CallAfter(self._show_models_placeholder, constants.PLACEHOLDER_MODELS_FAILED_TEMPLATE.format(error))
 			return
 		wx.CallAfter(self._set_models, models)
+
+	def _show_models_placeholder(self, text):
+		self.models_placeholder = text
+		for panel in (self.tts_panel, self.sts_panel, self.stt_panel):
+			panel.show_models_placeholder(text)
 
 	def _set_models(self, models):
 		self.tts_panel.set_models(api.filter_tts_models(models))
@@ -74,6 +89,8 @@ class MainFrame(wx.Frame):
 		self.open_audio_item = file_menu.Append(wx.ID_ANY, constants.MENU_OPEN_AUDIO_FILE)
 		file_menu.AppendSeparator()
 		self.exit_item = file_menu.Append(wx.ID_EXIT, constants.MENU_EXIT)
+		view_menu = wx.Menu()
+		self.usage_item = view_menu.Append(wx.ID_ANY, constants.MENU_USAGE)
 		tools_menu = wx.Menu()
 		self.voice_library_item = tools_menu.Append(wx.ID_ANY, constants.MENU_VOICE_LIBRARY)
 		self.clone_voice_item = tools_menu.Append(wx.ID_ANY, constants.MENU_CLONE_VOICE)
@@ -85,6 +102,7 @@ class MainFrame(wx.Frame):
 		help_menu = wx.Menu()
 		self.about_item = help_menu.Append(wx.ID_ABOUT, constants.MENU_ABOUT)
 		menu_bar.Append(file_menu, constants.MENU_FILE)
+		menu_bar.Append(view_menu, constants.MENU_VIEW)
 		menu_bar.Append(tools_menu, constants.MENU_TOOLS)
 		menu_bar.Append(settings_menu, constants.MENU_SETTINGS)
 		menu_bar.Append(help_menu, constants.MENU_HELP)
@@ -92,6 +110,7 @@ class MainFrame(wx.Frame):
 		self.Bind(wx.EVT_MENU, self._on_save_last_output, self.save_output_item)
 		self.Bind(wx.EVT_MENU, self._on_open_audio, self.open_audio_item)
 		self.Bind(wx.EVT_MENU, self._on_exit, self.exit_item)
+		self.Bind(wx.EVT_MENU, self._on_usage, self.usage_item)
 		self.Bind(wx.EVT_MENU, self._on_voice_library, self.voice_library_item)
 		self.Bind(wx.EVT_MENU, self._on_clone_voice, self.clone_voice_item)
 		self.Bind(wx.EVT_MENU, self._on_history, self.history_item)
@@ -127,6 +146,9 @@ class MainFrame(wx.Frame):
 	def _on_exit(self, event):
 		self.Close()
 
+	def _on_usage(self, event):
+		self._show_non_modal_dialog(UsageDialog(self))
+
 	def _on_voice_library(self, event):
 		self._show_non_modal_dialog(VoiceLibraryDialog(self, self.tts_panel, self.sts_panel))
 
@@ -148,12 +170,13 @@ class MainFrame(wx.Frame):
 		dialog.Destroy()
 
 	def _on_preferences(self, event):
-		dialog = SettingsDialog(self, self.tts_panel.models)
+		dialog = SettingsDialog(self, self.tts_panel.models, self.models_placeholder)
 		if dialog.ShowModal() == wx.ID_OK:
 			self.tts_panel._apply_defaults()
 			self.tts_panel.refresh_voices()
 			self.sts_panel.refresh_voices()
 			self.refresh_models()
+			usage.refresh()
 		dialog.Destroy()
 
 	def _on_about(self, event):

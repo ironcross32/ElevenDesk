@@ -42,3 +42,13 @@ def save_config(settings_dict):
 	with open(config_path, constants.FILE_MODE_TEXT_WRITE, encoding=constants.JSON_ENCODING) as config_file:
 		json.dump(settings_dict, config_file, indent=constants.CONTROL_GAP)
 
+
+def load_tts_pronunciation_dictionary_ids():
+	stored_ids = load_config()[constants.KEY_TTS_PRONUNCIATION_DICTIONARY_IDS]
+	return [dictionary_id for dictionary_id in stored_ids.split(constants.ID_LIST_SEPARATOR) if dictionary_id]
+
+
+def save_tts_pronunciation_dictionary_ids(dictionary_ids):
+	settings = load_config()
+	settings[constants.KEY_TTS_PRONUNCIATION_DICTIONARY_IDS] = constants.ID_LIST_SEPARATOR.join(dictionary_ids)
+	save_config(settings)
