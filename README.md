@@ -38,13 +38,15 @@ The API key is saved to ElevenDesk's per-user settings file outside the reposito
 
 ## Keyboard shortcuts
 
-- `Ctrl+Enter` — generate and play speech (Text to Speech tab)
+- `Ctrl+Enter` — generate and play speech (Text to Speech and Text to Dialogue tabs)
+- `Shift+Enter` — start the next speaker's line (Text to Dialogue script)
 - `Ctrl+S` — save last output
 - `Ctrl+O` — open audio file for transcription
 
 ## Features
 
 - Text to speech with voice, model, output format, and voice setting controls
+- Text to dialogue: multi-speaker scripts with up to 10 voices (see below)
 - Speech to text transcription
 - Sound effect generation
 - Voice design and cloning
@@ -54,3 +56,20 @@ The API key is saved to ElevenDesk's per-user settings file outside the reposito
 - Pronunciation dictionaries: create, import and download PLS files, add and remove alias or phoneme rules, rename, archive, and choose up to three to apply in Text to Speech
 - Recursive audio directory import for voice cloning
 
+
+## Writing dialogue scripts
+
+On the Text to Dialogue tab, a line that starts with `@Name:` switches to that voice. Everything after it, including blank lines and audio tags such as `[door slams]`, is spoken by that voice until the next tag. Text before the first tag uses the voice selected on the Text to Speech tab.
+
+```
+The door creaks open.
+
+@Alice: [whispering] Is anyone there?
+
+@Bob: Just me.
+```
+
+- Type `@` at the start of a line to hear matching voices. Keep typing to narrow the list, use `Up` and `Down` to move through it, and press `Tab` or `Enter` to insert the voice. `Escape` closes the list, and `Left` or `Right` closes it and moves the cursor.
+- `Shift+Enter` adds a blank line and a tag for the speaker before the current one, so two voices alternate. After a third voice speaks, it alternates between that voice and the one before it.
+- Tags use the part of the voice name before " - ". If two voices share that name, the full name is inserted instead.
+- A script can use up to 10 voices and 2,000 characters of spoken text. Square brackets must be paired on the same line and not nested, and curly braces are not allowed. Problems are announced with their line number, and the cursor moves to the spot.

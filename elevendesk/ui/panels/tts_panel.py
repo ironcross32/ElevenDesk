@@ -256,6 +256,12 @@ class TextToSpeechPanel(wx.Panel):
 				return True
 		return False
 
+	def get_selected_voice(self):
+		voice_index = choices.get_selected_index(self.voice_combo, self.voices)
+		if voice_index == wx.NOT_FOUND:
+			return None
+		return self.voices[voice_index]
+
 	def _on_voice_selected(self, event):
 		voice_index = choices.get_selected_index(self.voice_combo, self.voices)
 		if voice_index == wx.NOT_FOUND:

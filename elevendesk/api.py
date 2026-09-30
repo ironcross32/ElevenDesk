@@ -2,7 +2,7 @@ import datetime
 
 from elevenlabs.client import ElevenLabs
 from elevenlabs.core import ApiError
-from elevenlabs.types import PronunciationDictionaryVersionLocator, VoiceSettings
+from elevenlabs.types import DialogueInput, PronunciationDictionaryVersionLocator, ToDialogueSettingsResponseModel, VoiceSettings
 import httpx
 
 from elevendesk import config
@@ -318,6 +318,38 @@ def text_to_speech(text, voice_id, model_id, voice_settings, output_format, pron
 		]
 	response = _call_sdk(
 		_get_sdk_method(client, constants.API_ATTR_TEXT_TO_SPEECH, constants.API_ATTR_CONVERT),
+		keyword_arguments,
+	)
+	return _join_audio_chunks(response)
+
+
+def filter_dialogue_models(models):
+	dialogue_models = [model for model in models if model[constants.KEY_ID] in constants.KNOWN_DIALOGUE_MODEL_IDS]
+	if not any(model[constants.KEY_ID] == constants.MODEL_ELEVEN_V3 for model in dialogue_models):
+		dialogue_models.extend(models_from_ids((constants.MODEL_ELEVEN_V3,)))
+	return dialogue_models
+
+
+def text_to_dialogue(inputs, model_id, stability, output_format, pronunciation_dictionary_ids=()):
+	client = get_client()
+	try:
+		sdk_inputs = [DialogueInput(**dialogue_input) for dialogue_input in inputs]
+		sdk_settings = ToDialogueSettingsResponseModel(stability=stability)
+	except (TypeError, ValueError) as error:
+		raise ElevenDeskAPIError(str(error)) from error
+	keyword_arguments = {
+		constants.API_KW_INPUTS: sdk_inputs,
+		constants.API_KW_MODEL_ID: model_id,
+		constants.API_KW_SETTINGS: sdk_settings,
+		constants.API_KW_OUTPUT_FORMAT: output_format,
+	}
+	if pronunciation_dictionary_ids:
+		keyword_arguments[constants.API_KW_PRONUNCIATION_DICTIONARY_LOCATORS] = [
+			PronunciationDictionaryVersionLocator(pronunciation_dictionary_id=dictionary_id)
+			for dictionary_id in pronunciation_dictionary_ids
+		]
+	response = _call_sdk(
+		_get_sdk_method(client, constants.API_ATTR_TEXT_TO_DIALOGUE, constants.API_ATTR_CONVERT),
 		keyword_arguments,
 	)
 	return _join_audio_chunks(response)

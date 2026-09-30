@@ -14,6 +14,7 @@ from elevendesk.ui.dialogs.pronunciation_dialog import PronunciationDialog
 from elevendesk.ui.dialogs.settings_dialog import SettingsDialog
 from elevendesk.ui.dialogs.usage_dialog import UsageDialog
 from elevendesk.ui.dialogs.voice_library_dialog import VoiceLibraryDialog
+from elevendesk.ui.panels.dialogue_panel import DialoguePanel
 from elevendesk.ui.panels.sfx_panel import SoundEffectsPanel
 from elevendesk.ui.panels.stt_panel import SpeechToTextPanel
 from elevendesk.ui.panels.sts_panel import SpeechToSpeechPanel
@@ -29,11 +30,13 @@ class MainFrame(wx.Frame):
 		self._create_menu_bar()
 		self.notebook = wx.Notebook(self, name=constants.APP_TITLE)
 		self.tts_panel = TextToSpeechPanel(self.notebook)
+		self.dialogue_panel = DialoguePanel(self.notebook, self.tts_panel)
 		self.stt_panel = SpeechToTextPanel(self.notebook)
 		self.sts_panel = SpeechToSpeechPanel(self.notebook)
 		self.sfx_panel = SoundEffectsPanel(self.notebook)
 		self.voice_design_panel = VoiceDesignPanel(self.notebook, self.tts_panel)
 		self.notebook.AddPage(self.tts_panel, constants.TAB_TTS)
+		self.notebook.AddPage(self.dialogue_panel, constants.TAB_DIALOGUE)
 		self.notebook.AddPage(self.stt_panel, constants.TAB_STT)
 		self.notebook.AddPage(self.sts_panel, constants.TAB_STS)
 		self.notebook.AddPage(self.sfx_panel, constants.TAB_SFX)
@@ -47,6 +50,7 @@ class MainFrame(wx.Frame):
 			preferences_dialog = SettingsDialog(self, self.tts_panel.models, self.models_placeholder)
 			if preferences_dialog.ShowModal() == wx.ID_OK:
 				self.tts_panel._apply_defaults()
+				self.dialogue_panel.apply_defaults()
 				self.tts_panel.refresh_voices()
 				self.sts_panel.refresh_voices()
 				self.refresh_models()
@@ -74,11 +78,12 @@ class MainFrame(wx.Frame):
 
 	def _show_models_placeholder(self, text):
 		self.models_placeholder = text
-		for panel in (self.tts_panel, self.sts_panel, self.stt_panel):
+		for panel in (self.tts_panel, self.dialogue_panel, self.sts_panel, self.stt_panel):
 			panel.show_models_placeholder(text)
 
 	def _set_models(self, models):
 		self.tts_panel.set_models(api.filter_tts_models(models))
+		self.dialogue_panel.set_models(api.filter_dialogue_models(models))
 		self.sts_panel.set_models(api.filter_sts_models(models))
 		self.stt_panel.set_models(api.filter_stt_models(models))
 
@@ -173,6 +178,7 @@ class MainFrame(wx.Frame):
 		dialog = SettingsDialog(self, self.tts_panel.models, self.models_placeholder)
 		if dialog.ShowModal() == wx.ID_OK:
 			self.tts_panel._apply_defaults()
+			self.dialogue_panel.apply_defaults()
 			self.tts_panel.refresh_voices()
 			self.sts_panel.refresh_voices()
 			self.refresh_models()
