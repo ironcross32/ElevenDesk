@@ -150,7 +150,7 @@ wheels = [
 [[package]]
 name = "elevendesk"
 version = "1.0.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "elevenlabs" },
     { name = "prismatoid" },

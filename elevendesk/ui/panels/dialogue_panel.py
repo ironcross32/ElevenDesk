@@ -96,6 +96,8 @@ class DialoguePanel(wx.Panel):
 		self.stability_slider.Bind(wx.EVT_SLIDER, self._on_stability)
 		self.script_input.Bind(wx.EVT_TEXT, self._on_script_text)
 		self.script_input.Bind(wx.EVT_KILL_FOCUS, self._on_script_focus_lost)
+		for caret_event in (wx.EVT_KEY_UP, wx.EVT_LEFT_UP, wx.EVT_SET_FOCUS):
+			self.script_input.Bind(caret_event, self._on_script_caret_moved)
 		self.generate_button.Bind(wx.EVT_BUTTON, self._on_generate)
 		self.play_button.Bind(wx.EVT_BUTTON, self._on_play)
 		self.save_button.Bind(wx.EVT_BUTTON, self._on_save)
@@ -161,15 +163,33 @@ class DialoguePanel(wx.Panel):
 		)
 		new_text = self.script_input.GetValue()
 		self.script_input.SetInsertionPoint(self._position_from_index(new_text, start + len(replacement)))
+		self.update_script_position()
 
 	def _default_voice(self):
 		return self.tts_panel.get_selected_voice()
+
+	# The caret's line and column go on the window's status bar, where a screen reader's read status bar command
+	# finds them. Line numbers match the ones in script errors.
+
+	def update_script_position(self):
+		text, caret = self._get_script()
+		line_start, _ = dialogue_script.line_bounds(text, caret)
+		self.GetTopLevelParent().SetStatusText(constants.STATUS_BAR_SCRIPT_POSITION_TEMPLATE.format(
+			dialogue_script.line_index_at(text, caret) + constants.INDEX_STEP,
+			text.count(constants.NEWLINE) + constants.INDEX_STEP,
+			caret - line_start + constants.INDEX_STEP,
+		))
+
+	def _on_script_caret_moved(self, event):
+		event.Skip()
+		self.update_script_position()
 
 	# Voice tag suggestions. They are spoken through the screen reader rather than shown in a popup,
 	# so focus never leaves the script.
 
 	def _on_script_text(self, event):
 		event.Skip()
+		self.update_script_position()
 		text, caret = self._get_script()
 		partial = dialogue_script.partial_tag_at(text, caret)
 		if partial is None:
@@ -287,6 +307,7 @@ class DialoguePanel(wx.Panel):
 			error_index = dialogue_script.line_start_index(text, error.line_index) + error.column
 			self.script_input.SetFocus()
 			self.script_input.SetInsertionPoint(self._position_from_index(text, error_index))
+			self.update_script_position()
 			self.status_text.ReportFailure(str(error))
 			return
 		model_id = choices.get_selected_model_id(self.model_combo, self.models)

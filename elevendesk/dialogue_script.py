@@ -5,6 +5,8 @@ blank lines included, belongs to that voice until the next tag. Text before the 
 All positions here are indexes into the script string, where each line break counts as one character.
 """
 
+import unicodedata
+
 from elevendesk import constants
 
 
@@ -55,7 +57,7 @@ def line_start_index(text, line_index):
 def partial_tag_at(text, caret):
 	# Returns what has been typed after "@" when the caret sits inside an unfinished tag, otherwise None.
 	start, _ = line_bounds(text, caret)
-	typed = text[start:caret]
+	typed = text[start:caret].lstrip()
 	if not typed.startswith(constants.DIALOGUE_TAG_PREFIX) or constants.DIALOGUE_TAG_END in typed:
 		return None
 	return typed[len(constants.DIALOGUE_TAG_PREFIX):]
@@ -84,6 +86,8 @@ def suggestion_edit(text, caret, voice, voices):
 
 
 def _tag_on_line(line):
+	# Spaces before the "@" are allowed: a screen reader does not speak them, so they are easy to leave in by accident.
+	line = line.lstrip()
 	if not line.startswith(constants.DIALOGUE_TAG_PREFIX):
 		return None
 	colon = line.find(constants.DIALOGUE_TAG_END)
@@ -151,12 +155,27 @@ def _check_brackets(line, line_index, first_column):
 		raise ScriptError(line_index, constants.ERROR_DIALOGUE_BRACKET_UNCLOSED, open_column)
 
 
+def _has_spoken_text(text):
+	# The API rejects the whole request when one voice's text is nothing but audio tags and emojis.
+	in_audio_tag = False
+	for character in text:
+		if character == constants.DIALOGUE_AUDIO_TAG_OPEN:
+			in_audio_tag = True
+		elif character == constants.DIALOGUE_AUDIO_TAG_CLOSE:
+			in_audio_tag = False
+		elif not in_audio_tag and unicodedata.category(character).startswith(constants.DIALOGUE_SPOKEN_CATEGORIES):
+			return True
+	return False
+
+
 def parse_script(text, voices, default_voice=None):
 	# Returns a list of {voice_id, text} dialogue inputs, or raises ScriptError for the first problem found.
 	segments = []
 	voice = default_voice
 	segment_lines = []
 	segment_line_index = 0
+	# Where the segment's text starts on its first line, which is after the voice tag when there is one.
+	segment_column = 0
 
 	def finish_segment():
 		segment_text = constants.NEWLINE.join(segment_lines).strip()
@@ -164,19 +183,25 @@ def parse_script(text, voices, default_voice=None):
 			return
 		if voice is None:
 			raise ScriptError(segment_line_index, constants.ERROR_DIALOGUE_NO_DEFAULT_VOICE)
+		if not _has_spoken_text(segment_text):
+			first_line = segment_lines[0]
+			column = segment_column + len(first_line) - len(first_line.lstrip())
+			raise ScriptError(segment_line_index, constants.ERROR_DIALOGUE_NO_SPOKEN_TEXT, column)
 		segments.append((segment_line_index, voice, segment_text))
 
 	for line_index, line in enumerate(text.split(constants.NEWLINE)):
-		if line.startswith(constants.DIALOGUE_TAG_PREFIX):
-			colon = line.find(constants.DIALOGUE_TAG_END)
+		tag_column = len(line) - len(line.lstrip())
+		if line.startswith(constants.DIALOGUE_TAG_PREFIX, tag_column):
+			colon = line.find(constants.DIALOGUE_TAG_END, tag_column)
 			if colon == -1:
-				raise ScriptError(line_index, constants.ERROR_DIALOGUE_TAG_COLON)
+				raise ScriptError(line_index, constants.ERROR_DIALOGUE_TAG_COLON, tag_column)
 			tagged_voice = _resolve_voice(_tag_on_line(line), voices, line_index)
 			_check_brackets(line, line_index, colon + len(constants.DIALOGUE_TAG_END))
 			finish_segment()
 			voice = tagged_voice
 			segment_lines = [line[colon + len(constants.DIALOGUE_TAG_END):]]
 			segment_line_index = line_index
+			segment_column = colon + len(constants.DIALOGUE_TAG_END)
 		else:
 			_check_brackets(line, line_index, 0)
 			segment_lines.append(line)

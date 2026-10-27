@@ -61,6 +61,10 @@ KEY_AUDIO = "audio"
 KEY_FILE_PATH = "file_path"
 KEY_FILE_NAME = "file_name"
 KEY_FILE_DURATION = "file_duration"
+KEY_LINES = "lines"
+KEY_PLAN_CHUNKS = "plan_chunks"
+KEY_LENGTH_MS = "length_ms"
+KEY_INSTRUMENTAL = "instrumental"
 KEY_FILE_FORMAT = "file_format"
 KEY_FILE_SAMPLE_RATE = "file_sample_rate"
 KEY_FILE_CHANNELS = "file_channels"
@@ -116,6 +120,7 @@ TAB_STS = "Speech to Speech"
 TAB_SFX = "Sound Effects"
 TAB_VOICE_DESIGN = "Voice Design"
 TAB_DIALOGUE = "Text to Dialogue"
+TAB_MUSIC = "Music"
 LABEL_VOICE = "Voice"
 LABEL_MODEL = "Model"
 LABEL_OUTPUT_FORMAT = "Output Format"
@@ -136,6 +141,10 @@ NAME_SAVE_GENERATED_SOUND_EFFECT = "Save generated sound effect"
 NAME_GENERATE_DIALOGUE_SHORTCUT = "Generate dialogue, Ctrl+Enter"
 NAME_PLAY_GENERATED_DIALOGUE = "Play generated dialogue"
 NAME_SAVE_GENERATED_DIALOGUE = "Save generated dialogue"
+NAME_CREATE_MUSIC_PLAN = "Create composition plan from the description, free"
+NAME_GENERATE_MUSIC_SHORTCUT = "Generate music, Ctrl+Enter"
+NAME_PLAY_GENERATED_MUSIC = "Play generated music"
+NAME_SAVE_GENERATED_MUSIC = "Save generated music"
 NAME_DESIGN_NEW_VOICE = "Design new voice"
 NAME_VOICE_DESIGN_RESULT = "Designed voice result, read only"
 NAME_ADD_DESIGNED_VOICE = "Add designed voice to Text to Speech voice list"
@@ -164,6 +173,14 @@ LABEL_COPY = "Copy"
 LABEL_SAVE_TRANSCRIPT = "Save Transcript"
 LABEL_SOUND_PROMPT = "Describe the sound"
 LABEL_DURATION = "Duration (seconds)"
+LABEL_MUSIC_PROMPT = "Describe the music"
+LABEL_MUSIC_LENGTH = "Length in seconds, 0 lets the model choose"
+LABEL_INSTRUMENTAL = "Instrumental only"
+LABEL_MUSIC_FINETUNE = "Finetune"
+LABEL_MUSIC_PLAN = "Composition plan"
+LABEL_MUSIC_PLAN_V2_ONLY = "Composition plan (v2 models only)"
+LABEL_CREATE_PLAN = "Create Plan"
+LABEL_NO_FINETUNE = "None"
 LABEL_VOICE_DESCRIPTION = "Describe the voice"
 LABEL_VOICE_NAME = "Name for new voice"
 LABEL_DESIGN_VOICE = "Design Voice"
@@ -205,6 +222,7 @@ LABEL_PREVIEW = "Preview"
 LABEL_STOP = "Stop"
 LABEL_LOAD_MORE = "Load More"
 LABEL_ADD_TO_MY_VOICES = "Add to My Voices"
+LABEL_DELETE_VOICE = "Delete Voice"
 LABEL_DICTIONARIES = "Dictionaries"
 LABEL_RULES = "Rules"
 LABEL_NEW_DICTIONARY = "New Dictionary"
@@ -249,6 +267,8 @@ NAME_STOP_PREVIEW = "Stop preview"
 NAME_LOAD_MORE_VOICES = "Load more voices"
 VOICE_SOURCE_MY_VOICES = "My Voices"
 VOICE_SOURCE_COMMUNITY = "Community Library"
+# Voices ElevenLabs provides to every account; the API refuses to delete them.
+VOICE_CATEGORY_PREMADE = "premade"
 VOICE_SOURCES = (
 	VOICE_SOURCE_MY_VOICES,
 	VOICE_SOURCE_COMMUNITY,
@@ -333,6 +353,7 @@ TITLE_IMPORT_DICTIONARY = "Select a PLS pronunciation file"
 TITLE_SAVE_DICTIONARY = "Save pronunciation dictionary"
 TITLE_ARCHIVE_DICTIONARY = "Archive Dictionary"
 TITLE_REMOVE_RULE = "Remove Rule"
+TITLE_DELETE_VOICE = "Delete Voice"
 
 COLUMN_NAME = "Name"
 COLUMN_CATEGORY = "Category"
@@ -369,9 +390,21 @@ STATUS_TRANSCRIBING = "Transcribing audio..."
 STATUS_TRANSCRIBED = "Transcription complete."
 STATUS_GENERATING_EFFECT = "Generating sound effect..."
 STATUS_EFFECT_GENERATED = "Sound effect generated."
+STATUS_CREATING_MUSIC_PLAN = "Creating plan..."
+STATUS_MUSIC_PLAN_READY_TEMPLATE = "Plan ready: {0}, {1}."
+STATUS_GENERATING_MUSIC = "Generating music..."
+STATUS_GENERATING_MUSIC_PLAN_TEMPLATE = "Generating music from plan: {0}, {1}..."
+STATUS_MUSIC_GENERATED = "Music generated."
+MUSIC_SECTION_TEMPLATE = "{0} section"
+MUSIC_SECTIONS_TEMPLATE = "{0} sections"
+MUSIC_MINUTE_TEMPLATE = "{0} minute"
+MUSIC_MINUTES_TEMPLATE = "{0} minutes"
+MUSIC_SECOND_TEMPLATE = "{0} second"
+MUSIC_SECONDS_TEMPLATE = "{0} seconds"
 STATUS_GENERATING_DIALOGUE_TEMPLATE = "Generating dialogue: {0} lines, {1} voices, {2:,} characters..."
 STATUS_SUGGESTION_TEMPLATE = "{0}, {1} of {2}"
 STATUS_NO_MATCHING_VOICES = "No matching voices"
+STATUS_BAR_SCRIPT_POSITION_TEMPLATE = "Line {0} of {1}, column {2}"
 STATUS_DESIGNING_VOICE = "Designing voice..."
 STATUS_VOICE_DESIGNED = "Voice designed."
 STATUS_CLONING_VOICE = "Cloning voice..."
@@ -408,6 +441,8 @@ STATUS_LOADING_PREVIEW = "Loading preview..."
 STATUS_PLAYING_PREVIEW_TEMPLATE = "Playing preview of {0}."
 STATUS_PREVIEW_STOPPED = "Preview stopped."
 STATUS_ADDING_VOICE_TEMPLATE = "Adding {0} to My Voices..."
+STATUS_DELETING_VOICE_TEMPLATE = "Deleting {0}..."
+STATUS_VOICE_DELETED_TEMPLATE = "Deleted {0}."
 STATUS_AUDIO_FILES_ADDED_TEMPLATE = "Added {0} audio files; skipped {1} unreadable files."
 STATUS_AUDIO_FILES_LIMIT_TEMPLATE = "Added {0} audio files; skipped {1} unreadable files; {2} files were not added because the maximum is {3}."
 
@@ -437,6 +472,7 @@ ERROR_SDK_RESPONSE = "The ElevenLabs SDK returned an unexpected response."
 ERROR_API_REQUEST_ID_TEMPLATE = "{0} Request ID: {1}"
 ERROR_DELETE_HISTORY = "The history item could not be deleted."
 ERROR_NO_PREVIEW = "This voice has no preview."
+ERROR_DELETE_PREMADE_VOICE = "{0} is a default ElevenLabs voice and cannot be deleted."
 ERROR_DICTIONARY_NAME_REQUIRED = "Enter a dictionary name."
 ERROR_RULE_TEXT_REQUIRED = "Enter the word or phrase to replace."
 ERROR_RULE_REPLACEMENT_REQUIRED = "Enter what the word should be replaced with."
@@ -457,11 +493,29 @@ ERROR_DIALOGUE_BRACE_TEMPLATE = "{0} is not used in scripts. Audio tags use squa
 ERROR_DIALOGUE_BRACKET_NESTED = "this [ opens before the previous [ on the line is closed."
 ERROR_DIALOGUE_BRACKET_UNOPENED = "this ] has no matching [."
 ERROR_DIALOGUE_BRACKET_UNCLOSED = "this [ is not closed on the same line."
+ERROR_DIALOGUE_NO_SPOKEN_TEXT = "this voice has only audio tags here, with no words to speak. Add some words, or move the tags onto another line."
+ERROR_MUSIC_PROMPT_REQUIRED = "Enter a music description or a composition plan."
+ERROR_MUSIC_PLAN_PROMPT_REQUIRED = "Enter a music description to plan from."
+ERROR_MUSIC_LENGTH_RANGE_TEMPLATE = "Length must be 0, or {0} to {1} seconds."
+ERROR_MUSIC_PROMPT_REJECTED_TEMPLATE = "Prompt rejected. Suggestion: {0}"
+ERROR_MUSIC_PLAN_REJECTED = "Plan rejected. The suggested plan is now in the plan field."
+ERROR_MUSIC_PLAN_EMPTY = "the plan has no sections."
+ERROR_MUSIC_SECTION_REQUIRED = "start with a section line, such as [Verse 1] 30."
+ERROR_MUSIC_SECTION_DURATION = "section needs a duration in seconds after the ], such as [Verse 1] 30."
+ERROR_MUSIC_SECTION_NAME_LENGTH_TEMPLATE = "section names can be at most {0} characters."
+ERROR_MUSIC_SECTION_DURATION_RANGE_TEMPLATE = "sections must last {0} to {1} seconds."
+ERROR_MUSIC_TOO_MANY_LINES_TEMPLATE = "a section can have at most {0} lyric lines."
+ERROR_MUSIC_LINE_TOO_LONG_TEMPLATE = "lyric lines can be at most {0} characters."
+ERROR_MUSIC_PLAN_TOO_LONG_TEMPLATE = "the plan reaches {0} here, but a song can be at most {1}."
 CONFIRM_ARCHIVE_DICTIONARY_TEMPLATE = (
 	"Archive {0}? It will disappear from this list and Text to Speech will stop using it. "
 	"ElevenLabs does not allow pronunciation dictionaries to be deleted, only archived."
 )
 CONFIRM_REMOVE_RULE_TEMPLATE = "Remove the rule for {0}? Every rule for this exact text will be removed."
+CONFIRM_DELETE_VOICE_TEMPLATE = (
+	"Delete {0}? This permanently removes the voice from your account and cannot be undone. "
+	"A voice added from the community library can be added again later, but a cloned or designed voice is gone for good."
+)
 
 ABOUT_TEXT_TEMPLATE = "{0} version {1}\nAccessible desktop client for ElevenLabs."
 VOICE_RESULT_TEMPLATE = "Name: {0}\nVoice ID: {1}"
@@ -518,6 +572,15 @@ API_ATTR_CONVERT = "convert"
 API_ATTR_TEXT_TO_DIALOGUE = "text_to_dialogue"
 API_ATTR_SPEECH_TO_TEXT = "speech_to_text"
 API_ATTR_SOUND_GENERATION = "text_to_sound_effects"
+API_ATTR_MUSIC = "music"
+API_ATTR_COMPOSE = "compose"
+API_ATTR_COMPOSITION_PLAN = "composition_plan"
+API_ATTR_FINETUNES = "finetunes"
+API_ATTR_CHUNKS = "chunks"
+API_ATTR_DURATION_MS = "duration_ms"
+API_ATTR_POSITIVE_STYLES = "positive_styles"
+API_ATTR_NEGATIVE_STYLES = "negative_styles"
+API_ATTR_FINETUNE_STATUS_COMPLETED = "completed"
 API_ATTR_VOICE_DESIGN = "text_to_voice"
 API_ATTR_CREATE = "create"
 API_ATTR_CREATE_PREVIEWS = "create_previews"
@@ -600,6 +663,12 @@ API_ATTR_NEXT_PAYMENT_ATTEMPT_UNIX = "next_payment_attempt_unix"
 API_ERROR_DETAIL = "detail"
 API_ERROR_MESSAGE = "message"
 API_ERROR_REQUEST_ID = "request_id"
+API_ERROR_STATUS = "status"
+API_ERROR_DATA = "data"
+API_ERROR_BAD_PROMPT = "bad_prompt"
+API_ERROR_BAD_COMPOSITION_PLAN = "bad_composition_plan"
+API_ERROR_PROMPT_SUGGESTION = "prompt_suggestion"
+API_ERROR_COMPOSITION_PLAN_SUGGESTION = "composition_plan_suggestion"
 
 API_KW_TEXT = "text"
 API_KW_VOICE_ID = "voice_id"
@@ -640,6 +709,10 @@ API_KW_ARCHIVED = "archived"
 API_KW_PRONUNCIATION_DICTIONARY_LOCATORS = "pronunciation_dictionary_locators"
 API_KW_INPUTS = "inputs"
 API_KW_SETTINGS = "settings"
+API_KW_COMPOSITION_PLAN = "composition_plan"
+API_KW_MUSIC_LENGTH_MS = "music_length_ms"
+API_KW_FORCE_INSTRUMENTAL = "force_instrumental"
+API_KW_FINETUNE_ID = "finetune_id"
 API_KEY_SIMILARITY_BOOST = "similarity_boost"
 API_KEY_STABILITY = "stability"
 API_KEY_STYLE = "style"
@@ -721,6 +794,7 @@ PROGRESS_PULSE_INTERVAL_MS = 120
 PREVIEW_MAX_LENGTH = 80
 HISTORY_PAGE_SIZE = 100
 SHARED_VOICES_PAGE_SIZE = 50
+MUSIC_FINETUNES_PAGE_SIZE = 150
 PREVIEW_DOWNLOAD_TIMEOUT_SECONDS = 30.0
 PREVIEW_OUTPUT_FORMAT = OUTPUT_MP3_44100_128
 CLONE_MAX_AUDIO_FILES = 25
@@ -731,11 +805,44 @@ DIALOGUE_TAG_TEMPLATE = "@{0}: "
 DIALOGUE_AUDIO_TAG_OPEN = "["
 DIALOGUE_AUDIO_TAG_CLOSE = "]"
 DIALOGUE_INVALID_CHARACTERS = ("{", "}")
+# First letters of the Unicode categories that count as words to speak: letters, numbers and punctuation.
+# Symbols are left out because the API discards emojis before checking that a line has text.
+DIALOGUE_SPOKEN_CATEGORIES = ("L", "N", "P")
 # ElevenLabs voice names often read "Liam - Energetic, Social Media Creator"; tags use the part before the dash.
 VOICE_NAME_DESCRIPTION_SEPARATOR = " - "
 DIALOGUE_MAX_VOICES = 10
 # The API documents 2,000 characters as the reliable limit for one dialogue request.
 DIALOGUE_MAX_CHARACTERS = 2000
+MUSIC_MODEL_V2_5 = "music_v2_5"
+MUSIC_MODEL_V1 = "music_v1"
+MUSIC_MODELS = (
+	("Music v2.5", MUSIC_MODEL_V2_5),
+	("Music v2", "music_v2"),
+	("Music v1", MUSIC_MODEL_V1),
+)
+# Music v1 takes a differently shaped plan, so the plain-text plan is only offered for the v2 models.
+MUSIC_PLAN_MODELS = (MUSIC_MODEL_V2_5, "music_v2")
+# "auto" would pick mp3_48000_192 on v2 models, which playback and saving do not know, so the format is fixed.
+MUSIC_OUTPUT_FORMAT = OUTPUT_MP3_44100_192
+MUSIC_LENGTH_AUTO = 0
+MUSIC_LENGTH_MINIMUM = 3
+MUSIC_LENGTH_MAXIMUM = 600
+MUSIC_SECTION_MINIMUM_SECONDS = 3
+MUSIC_SECTION_MAXIMUM_SECONDS = 120
+MUSIC_SECTION_NAME_MAX_LENGTH = 100
+MUSIC_SECTION_MAX_LINES = 30
+MUSIC_LINE_MAX_LENGTH = 200
+MILLISECONDS_PER_SECOND = 1000
+SECONDS_PER_MINUTE = 60
+MUSIC_PLAN_SECTION_OPEN = "["
+MUSIC_PLAN_SECTION_CLOSE = "]"
+MUSIC_PLAN_STYLES_PREFIX = "+"
+MUSIC_PLAN_NEGATIVE_STYLES_PREFIX = "-"
+MUSIC_PLAN_STYLE_SEPARATOR = ","
+MUSIC_PLAN_STYLE_JOINER = ", "
+MUSIC_PLAN_SECTION_TEMPLATE = "[{0}] {1}"
+MUSIC_PLAN_STYLES_TEMPLATE = "{0} {1}"
+MUSIC_PLAN_SECONDS_FORMAT = "{0:g}"
 HISTORY_DATE_PREFIX_FORMAT = "%A, %B"
 HISTORY_DATE_TEMPLATE = "{0} {1}, {2}"
 FILE_DURATION_TEMPLATE = "{0:.2f} seconds"

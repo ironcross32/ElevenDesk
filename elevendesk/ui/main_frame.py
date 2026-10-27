@@ -15,6 +15,7 @@ from elevendesk.ui.dialogs.settings_dialog import SettingsDialog
 from elevendesk.ui.dialogs.usage_dialog import UsageDialog
 from elevendesk.ui.dialogs.voice_library_dialog import VoiceLibraryDialog
 from elevendesk.ui.panels.dialogue_panel import DialoguePanel
+from elevendesk.ui.panels.music_panel import MusicPanel
 from elevendesk.ui.panels.sfx_panel import SoundEffectsPanel
 from elevendesk.ui.panels.stt_panel import SpeechToTextPanel
 from elevendesk.ui.panels.sts_panel import SpeechToSpeechPanel
@@ -34,13 +35,19 @@ class MainFrame(wx.Frame):
 		self.stt_panel = SpeechToTextPanel(self.notebook)
 		self.sts_panel = SpeechToSpeechPanel(self.notebook)
 		self.sfx_panel = SoundEffectsPanel(self.notebook)
+		self.music_panel = MusicPanel(self.notebook)
 		self.voice_design_panel = VoiceDesignPanel(self.notebook, self.tts_panel)
 		self.notebook.AddPage(self.tts_panel, constants.TAB_TTS)
 		self.notebook.AddPage(self.dialogue_panel, constants.TAB_DIALOGUE)
 		self.notebook.AddPage(self.stt_panel, constants.TAB_STT)
 		self.notebook.AddPage(self.sts_panel, constants.TAB_STS)
 		self.notebook.AddPage(self.sfx_panel, constants.TAB_SFX)
+		self.notebook.AddPage(self.music_panel, constants.TAB_MUSIC)
 		self.notebook.AddPage(self.voice_design_panel, constants.TAB_VOICE_DESIGN)
+		# The status bar only carries the script position, so it is shown on the Text to Dialogue tab alone.
+		self.status_bar = self.CreateStatusBar()
+		self.status_bar.Hide()
+		self.notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self._on_page_changed)
 		self.Bind(wx.EVT_CLOSE, self._on_close)
 		self.Centre()
 		self.refresh_models()
@@ -59,6 +66,16 @@ class MainFrame(wx.Frame):
 			usage.refresh()
 		self.Show()
 		wx.CallAfter(self.tts_panel.focus_text_input)
+
+	def _on_page_changed(self, event):
+		event.Skip()
+		on_dialogue = self.notebook.GetCurrentPage() is self.dialogue_panel
+		self.status_bar.Show(on_dialogue)
+		self.SendSizeEvent()
+		if on_dialogue:
+			self.dialogue_panel.update_script_position()
+		if self.notebook.GetCurrentPage() is self.music_panel:
+			self.music_panel.load_finetunes()
 
 	def refresh_models(self):
 		if not config.load_config()[constants.KEY_API_KEY]:

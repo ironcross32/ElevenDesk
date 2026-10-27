@@ -2,7 +2,14 @@ import datetime
 
 from elevenlabs.client import ElevenLabs
 from elevenlabs.core import ApiError
-from elevenlabs.types import DialogueInput, PronunciationDictionaryVersionLocator, ToDialogueSettingsResponseModel, VoiceSettings
+from elevenlabs.types import (
+	CompositionPlan,
+	DialogueInput,
+	GenerationChunkInput,
+	PronunciationDictionaryVersionLocator,
+	ToDialogueSettingsResponseModel,
+	VoiceSettings,
+)
 import httpx
 
 from elevendesk import config
@@ -11,6 +18,15 @@ from elevendesk import constants
 
 class ElevenDeskAPIError(Exception):
 	pass
+
+
+class MusicRejectedError(ElevenDeskAPIError):
+	# The music API turned down a prompt or plan (usually for naming an artist or quoting lyrics) and offered a replacement.
+
+	def __init__(self, message, prompt_suggestion=None, plan_suggestion=None):
+		super().__init__(message)
+		self.prompt_suggestion = prompt_suggestion
+		self.plan_suggestion = plan_suggestion
 
 
 _client = None
@@ -198,6 +214,15 @@ def add_shared_voice(public_owner_id, voice_id, name):
 		},
 	)
 	return _get_attribute(response, constants.API_ATTR_VOICE_ID, constants.EMPTY_TEXT) or voice_id
+
+
+def delete_voice(voice_id):
+	# Works on cloned, designed and library-added voices alike; library voices can be added again afterwards.
+	client = get_client()
+	_call_sdk(
+		_get_sdk_method(client, constants.API_ATTR_VOICES, constants.API_ATTR_DELETE),
+		{constants.API_KW_VOICE_ID: voice_id},
+	)
 
 
 def get_voice_preview(preview_url):
@@ -394,6 +419,116 @@ def generate_sound_effect(prompt, duration_seconds):
 		},
 	)
 	return _join_audio_chunks(response)
+
+
+def _raise_if_music_rejected(error):
+	# Rejections arrive as an ApiError whose detail has a status and a suggestion under data.
+	cause = error.__cause__
+	if not isinstance(cause, ApiError) or not isinstance(cause.body, dict):
+		return
+	detail = cause.body.get(constants.API_ERROR_DETAIL)
+	if not isinstance(detail, dict):
+		return
+	data = detail.get(constants.API_ERROR_DATA) or {}
+	status = detail.get(constants.API_ERROR_STATUS)
+	if status == constants.API_ERROR_BAD_PROMPT:
+		suggestion = _get_attribute(data, constants.API_ERROR_PROMPT_SUGGESTION)
+		if suggestion:
+			raise MusicRejectedError(
+				constants.ERROR_MUSIC_PROMPT_REJECTED_TEMPLATE.format(suggestion),
+				prompt_suggestion=suggestion,
+			) from cause
+	elif status == constants.API_ERROR_BAD_COMPOSITION_PLAN:
+		chunks = _music_plan_chunks(_get_attribute(data, constants.API_ERROR_COMPOSITION_PLAN_SUGGESTION))
+		if chunks:
+			raise MusicRejectedError(constants.ERROR_MUSIC_PLAN_REJECTED, plan_suggestion=chunks) from cause
+
+
+def _music_plan_chunks(plan):
+	# Plan chunks as plain dicts; audio reference chunks carry no text and are left out.
+	chunks = []
+	for chunk in _get_collection(plan, constants.API_ATTR_CHUNKS) if plan else []:
+		text = _get_attribute(chunk, constants.API_ATTR_TEXT)
+		if text is None:
+			continue
+		chunks.append({
+			constants.API_ATTR_TEXT: text,
+			constants.API_ATTR_DURATION_MS: _get_attribute(chunk, constants.API_ATTR_DURATION_MS, 0),
+			constants.API_ATTR_POSITIVE_STYLES: list(_get_attribute(chunk, constants.API_ATTR_POSITIVE_STYLES) or []),
+			constants.API_ATTR_NEGATIVE_STYLES: list(_get_attribute(chunk, constants.API_ATTR_NEGATIVE_STYLES) or []),
+		})
+	return chunks
+
+
+def compose_music(model_id, prompt=None, plan_chunks=None, length_ms=None, instrumental=False, finetune_id=None):
+	# Length and instrumental only apply to a prompt; a plan sets its own length section by section.
+	client = get_client()
+	keyword_arguments = {
+		constants.API_KW_MODEL_ID: model_id,
+		constants.API_KW_OUTPUT_FORMAT: constants.MUSIC_OUTPUT_FORMAT,
+	}
+	if plan_chunks:
+		keyword_arguments[constants.API_KW_COMPOSITION_PLAN] = CompositionPlan(
+			chunks=[GenerationChunkInput(**chunk) for chunk in plan_chunks],
+		)
+	else:
+		keyword_arguments[constants.API_KW_PROMPT] = prompt
+		if length_ms:
+			keyword_arguments[constants.API_KW_MUSIC_LENGTH_MS] = length_ms
+		if instrumental:
+			keyword_arguments[constants.API_KW_FORCE_INSTRUMENTAL] = True
+	if finetune_id:
+		keyword_arguments[constants.API_KW_FINETUNE_ID] = finetune_id
+	try:
+		# The SDK streams the song, so errors (rejections included) are raised while the chunks are read.
+		return _join_audio_chunks(
+			_call_sdk(_get_sdk_method(client, constants.API_ATTR_MUSIC, constants.API_ATTR_COMPOSE), keyword_arguments)
+		)
+	except ElevenDeskAPIError as error:
+		_raise_if_music_rejected(error)
+		raise
+
+
+def create_music_plan(prompt, model_id, length_ms=None):
+	# Creating a plan costs no credits.
+	client = get_client()
+	keyword_arguments = {
+		constants.API_KW_PROMPT: prompt,
+		constants.API_KW_MODEL_ID: model_id,
+	}
+	if length_ms:
+		keyword_arguments[constants.API_KW_MUSIC_LENGTH_MS] = length_ms
+	music = _get_sdk_section(client, constants.API_ATTR_MUSIC)
+	try:
+		response = _call_sdk(
+			_get_sdk_method(music, constants.API_ATTR_COMPOSITION_PLAN, constants.API_ATTR_CREATE),
+			keyword_arguments,
+		)
+	except ElevenDeskAPIError as error:
+		_raise_if_music_rejected(error)
+		raise
+	chunks = _music_plan_chunks(response)
+	if not chunks:
+		raise ElevenDeskAPIError(constants.ERROR_SDK_RESPONSE)
+	return chunks
+
+
+def get_music_finetunes():
+	# Only finished finetunes can be used to generate.
+	client = get_client()
+	music = _get_sdk_section(client, constants.API_ATTR_MUSIC)
+	response = _call_sdk(
+		_get_sdk_method(music, constants.API_ATTR_FINETUNES, constants.API_ATTR_LIST),
+		{constants.API_KW_PAGE_SIZE: constants.MUSIC_FINETUNES_PAGE_SIZE},
+	)
+	return [
+		{
+			constants.KEY_ID: _get_attribute(finetune, constants.API_ATTR_ID, constants.EMPTY_TEXT),
+			constants.KEY_NAME: _get_attribute(finetune, constants.API_ATTR_NAME, constants.EMPTY_TEXT),
+		}
+		for finetune in _get_collection(response, constants.API_ATTR_FINETUNES)
+		if _get_attribute(finetune, constants.API_ATTR_STATUS) == constants.API_ATTR_FINETUNE_STATUS_COMPLETED
+	]
 
 
 def design_voice(prompt, name):

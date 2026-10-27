@@ -9,7 +9,7 @@ from elevendesk import playback
 from elevendesk import usage
 from elevendesk.ui import choices
 from elevendesk.ui import lists
-from elevendesk.ui.status_text import StatusText
+from elevendesk.ui.status_text import StatusText, announce
 
 
 class VoiceLibraryDialog(wx.Dialog):
@@ -51,6 +51,7 @@ class VoiceLibraryDialog(wx.Dialog):
 		self.preview_button = wx.Button(self, label=constants.LABEL_PREVIEW, name=constants.NAME_PREVIEW_VOICE)
 		self.stop_button = wx.Button(self, label=constants.LABEL_STOP, name=constants.NAME_STOP_PREVIEW)
 		self.use_button = wx.Button(self, label=constants.LABEL_USE_VOICE, name=constants.LABEL_USE_VOICE)
+		self.delete_button = wx.Button(self, label=constants.LABEL_DELETE_VOICE, name=constants.LABEL_DELETE_VOICE)
 		self.load_more_button = wx.Button(self, label=constants.LABEL_LOAD_MORE, name=constants.NAME_LOAD_MORE_VOICES)
 		self.load_more_button.Disable()
 		self.status_text = StatusText(self, constants.STATUS_LOADING, constants.LABEL_STATUS)
@@ -86,7 +87,7 @@ class VoiceLibraryDialog(wx.Dialog):
 		main_sizer.Add(self.filter_sizer, constants.SIZER_PROPORTION_NONE, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
 		main_sizer.Add(self.voice_list.control.control, constants.SIZER_PROPORTION_EXPAND, wx.EXPAND | wx.BOTTOM, constants.SECTION_GAP)
 		button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-		for button in (self.preview_button, self.stop_button, self.use_button, self.load_more_button):
+		for button in (self.preview_button, self.stop_button, self.use_button, self.delete_button, self.load_more_button):
 			button_sizer.Add(button, constants.SIZER_PROPORTION_NONE, wx.RIGHT, constants.CONTROL_GAP)
 		main_sizer.Add(button_sizer, constants.SIZER_PROPORTION_NONE, wx.BOTTOM, constants.SECTION_GAP)
 		main_sizer.Add(self.status_text, constants.SIZER_PROPORTION_NONE, wx.EXPAND)
@@ -101,9 +102,11 @@ class VoiceLibraryDialog(wx.Dialog):
 		for filter_combo in (self.gender_combo, self.age_combo, self.language_combo, self.sort_combo):
 			choices.bind_selection(filter_combo, self._on_search)
 		lists.bind_item_activated(self.voice_list, self._on_preview)
+		lists.bind_key_down(self.voice_list, self._on_list_key)
 		self.preview_button.Bind(wx.EVT_BUTTON, self._on_preview)
 		self.stop_button.Bind(wx.EVT_BUTTON, self._on_stop)
 		self.use_button.Bind(wx.EVT_BUTTON, self._on_use)
+		self.delete_button.Bind(wx.EVT_BUTTON, self._on_delete)
 		self.load_more_button.Bind(wx.EVT_BUTTON, self._on_load_more)
 		self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy)
 		self.Bind(wx.EVT_CHAR_HOOK, self._on_key_hook)
@@ -127,6 +130,7 @@ class VoiceLibraryDialog(wx.Dialog):
 			self.preview_button,
 			self.stop_button,
 			self.use_button,
+			self.delete_button,
 			self.load_more_button,
 		)
 		for control_index in range(constants.FIRST_ITEM_INDEX + constants.INDEX_STEP, len(controls)):
@@ -141,6 +145,8 @@ class VoiceLibraryDialog(wx.Dialog):
 		self.main_sizer.Show(self.filter_sizer, is_community, recursive=True)
 		self.search_button.Show(is_community)
 		self.load_more_button.Show(is_community)
+		# Community voices are not in the account, so there is nothing to delete.
+		self.delete_button.Show(not is_community)
 		if is_community:
 			self.search_input.SetName(constants.NAME_SEARCH_COMMUNITY)
 			self.use_button.SetLabel(constants.LABEL_ADD_TO_MY_VOICES)
@@ -340,6 +346,62 @@ class VoiceLibraryDialog(wx.Dialog):
 		if self:
 			self.use_button.Enable()
 			self.status_text.ReportFailure(message)
+
+	def _on_list_key(self, event):
+		if lists.is_delete_key(event) and not self._is_community():
+			self._on_delete(event)
+			return
+		event.Skip()
+
+	def _on_delete(self, event):
+		voice = self._get_selected_voice()
+		if voice is None:
+			return
+		name = voice[constants.KEY_NAME]
+		if voice[constants.KEY_CATEGORY] == constants.VOICE_CATEGORY_PREMADE:
+			self.status_text.ReportFailure(constants.ERROR_DELETE_PREMADE_VOICE.format(name))
+			return
+		answer = wx.MessageBox(
+			constants.CONFIRM_DELETE_VOICE_TEMPLATE.format(name),
+			constants.TITLE_DELETE_VOICE,
+			wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING,
+			self,
+		)
+		if answer != wx.YES:
+			return
+		self.delete_button.Disable()
+		self.status_text.SetLabel(constants.STATUS_DELETING_VOICE_TEMPLATE.format(name))
+		threading.Thread(target=self._delete_voice_worker, args=(voice,), daemon=constants.THREAD_DAEMON).start()
+
+	def _delete_voice_worker(self, voice):
+		try:
+			api.delete_voice(voice[constants.KEY_VOICE_ID])
+		except api.ElevenDeskAPIError as error:
+			wx.CallAfter(self._delete_voice_failed, str(error))
+			return
+		usage.refresh()
+		wx.CallAfter(self._voice_deleted, voice)
+
+	def _delete_voice_failed(self, message):
+		if self:
+			self.delete_button.Enable()
+			self.status_text.ReportFailure(message)
+
+	def _voice_deleted(self, voice):
+		# The voice pickers are refreshed even if this dialog has since closed, so they never offer a deleted voice.
+		self.tts_panel.refresh_voices()
+		self.sts_panel.refresh_voices()
+		if not self:
+			return
+		self.delete_button.Enable()
+		if voice in self.voices:
+			self.voices.remove(voice)
+		# The list may have been reloaded or switched to the community library while the request ran.
+		if voice in self.voice_list.models:
+			lists.delete_item(self.voice_list, voice)
+		message = constants.STATUS_VOICE_DELETED_TEMPLATE.format(voice[constants.KEY_NAME])
+		self.status_text.SetLabel(message)
+		announce(message)
 
 	def _use_voice(self, voice_id):
 		self.tts_panel.refresh_voices(voice_id)
