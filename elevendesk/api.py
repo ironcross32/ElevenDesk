@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 import datetime
 
 from elevenlabs.client import ElevenLabs
@@ -409,17 +410,40 @@ def speech_to_speech(audio_bytes, voice_id, model_id, output_format):
 	return _join_audio_chunks(response)
 
 
-def generate_sound_effect(prompt, duration_seconds):
+def generate_sound_effect(prompt, duration_seconds, prompt_influence, loop, output_format):
+	# A duration of None is left out so the API picks a length from the prompt.
 	client = get_client()
+	keyword_arguments = {
+		constants.API_KW_TEXT: prompt,
+		constants.API_KW_PROMPT_INFLUENCE: prompt_influence,
+		constants.API_KW_LOOP: loop,
+		constants.API_KW_OUTPUT_FORMAT: output_format,
+		constants.API_KW_MODEL_ID: constants.SFX_MODEL_ID,
+	}
+	if duration_seconds is not None:
+		keyword_arguments[constants.API_KW_DURATION_SECONDS] = duration_seconds
 	response = _call_sdk(
 		_get_sdk_method(client, constants.API_ATTR_SOUND_GENERATION, constants.API_ATTR_CONVERT),
-		{
-			constants.API_KW_TEXT: prompt,
-			constants.API_KW_DURATION_SECONDS: duration_seconds,
-			constants.API_KW_MODEL_ID: constants.SFX_MODEL_ID,
-		},
+		keyword_arguments,
 	)
 	return _join_audio_chunks(response)
+
+
+def generate_sound_effect_variations(count, *sound_effect_arguments):
+	# The API returns one sound per request, so the website's several variations mean several requests.
+	# Returns the sounds that succeeded and the first error message, or raises if every request failed.
+	with ThreadPoolExecutor(max_workers=constants.SFX_MAX_CONCURRENT_REQUESTS) as executor:
+		futures = [executor.submit(generate_sound_effect, *sound_effect_arguments) for _ in range(count)]
+	variations = []
+	first_error = None
+	for future in futures:
+		try:
+			variations.append(future.result())
+		except ElevenDeskAPIError as error:
+			first_error = first_error or error
+	if not variations:
+		raise first_error
+	return variations, str(first_error) if first_error else None
 
 
 def _raise_if_music_rejected(error):

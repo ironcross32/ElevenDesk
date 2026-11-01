@@ -96,7 +96,7 @@ def _to_wav_bytes(audio_bytes, sample_rate):
 
 
 def _prepare_audio(audio_bytes, output_format):
-	if output_format.startswith(constants.OUTPUT_MP3_PREFIX):
+	if output_format.startswith((constants.OUTPUT_MP3_PREFIX, constants.OUTPUT_WAV_PREFIX)):
 		return audio_bytes
 	if output_format == constants.OUTPUT_PCM_44100:
 		return _to_wav_bytes(audio_bytes, constants.PCM_SAMPLE_RATE)

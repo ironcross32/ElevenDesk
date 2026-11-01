@@ -49,7 +49,7 @@ The API key is saved to ElevenDesk's per-user settings file outside the reposito
 - Text to speech with voice, model, output format, and voice setting controls
 - Text to dialogue: multi-speaker scripts with up to 10 voices (see below)
 - Speech to text transcription
-- Sound effect generation
+- Sound effect generation with automatic or set duration, prompt influence, seamless looping, output format, and up to four variations per click (each variation is billed as its own request)
 - Music generation from a description or an editable composition plan (see below), with optional finetunes; needs a paid ElevenLabs plan
 - Voice design and cloning
 - Voice library browser

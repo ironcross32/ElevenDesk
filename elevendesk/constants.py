@@ -24,12 +24,15 @@ OUTPUT_MP3_44100_128 = "mp3_44100_128"
 OUTPUT_MP3_44100_192 = "mp3_44100_192"
 OUTPUT_PCM_44100 = "pcm_44100"
 OUTPUT_ULAW_8000 = "ulaw_8000"
+OUTPUT_WAV_48000 = "wav_48000"
 OUTPUT_FORMATS = (
 	OUTPUT_MP3_44100_128,
 	OUTPUT_MP3_44100_192,
 	OUTPUT_PCM_44100,
 	OUTPUT_ULAW_8000,
 )
+# The website offers WAV at 48 kHz for sound effects; through the API it has to be chosen before generating.
+SFX_OUTPUT_FORMATS = OUTPUT_FORMATS + (OUTPUT_WAV_48000,)
 
 KEY_API_KEY = "api_key"
 KEY_DEFAULT_MODEL = "default_model"
@@ -172,7 +175,13 @@ LABEL_TRANSCRIPT = "Transcript"
 LABEL_COPY = "Copy"
 LABEL_SAVE_TRANSCRIPT = "Save Transcript"
 LABEL_SOUND_PROMPT = "Describe the sound"
-LABEL_DURATION = "Duration (seconds)"
+LABEL_DURATION = "Duration in seconds, 0 lets the model choose"
+LABEL_PROMPT_INFLUENCE = "Prompt Influence"
+LABEL_SEAMLESS_LOOP = "Seamless loop"
+LABEL_VARIATION_COUNT = "Number of variations"
+LABEL_VARIATIONS = "Sound list"
+COLUMN_VARIATION = "Variation"
+VARIATION_ITEM_TEMPLATE = "Sound {0}"
 LABEL_MUSIC_PROMPT = "Describe the music"
 LABEL_MUSIC_LENGTH = "Length in seconds, 0 lets the model choose"
 LABEL_INSTRUMENTAL = "Instrumental only"
@@ -388,8 +397,9 @@ STATUS_GENERATING = "Generating audio..."
 STATUS_GENERATED = "Audio generated."
 STATUS_TRANSCRIBING = "Transcribing audio..."
 STATUS_TRANSCRIBED = "Transcription complete."
-STATUS_GENERATING_EFFECT = "Generating sound effect..."
-STATUS_EFFECT_GENERATED = "Sound effect generated."
+STATUS_GENERATING_VARIATIONS_TEMPLATE = "Generating sound effects: {0}..."
+STATUS_VARIATIONS_GENERATED_TEMPLATE = "Sound effects generated: {0}."
+STATUS_VARIATIONS_PARTIAL_TEMPLATE = "Sound effects generated: {0} of {1}. {2}"
 STATUS_CREATING_MUSIC_PLAN = "Creating plan..."
 STATUS_MUSIC_PLAN_READY_TEMPLATE = "Plan ready: {0}, {1}."
 STATUS_GENERATING_MUSIC = "Generating music..."
@@ -501,6 +511,7 @@ ERROR_MUSIC_PROMPT_REJECTED_TEMPLATE = "Prompt rejected. Suggestion: {0}"
 ERROR_MUSIC_PLAN_REJECTED = "Plan rejected. The suggested plan is now in the plan field."
 ERROR_MUSIC_PLAN_EMPTY = "the plan has no sections."
 ERROR_MUSIC_SECTION_REQUIRED = "start with a section line, such as [Verse 1] 30."
+ERROR_DURATION_RANGE_TEMPLATE = "Duration must be 0 to let the model choose, or {0} to {1} seconds."
 ERROR_MUSIC_SECTION_DURATION = "section needs a duration in seconds after the ], such as [Verse 1] 30."
 ERROR_MUSIC_SECTION_NAME_LENGTH_TEMPLATE = "section names can be at most {0} characters."
 ERROR_MUSIC_SECTION_DURATION_RANGE_TEMPLATE = "sections must last {0} to {1} seconds."
@@ -550,6 +561,7 @@ OUTPUT_FILE_OPTIONS = {
 	OUTPUT_MP3_44100_192: (EXTENSION_MP3, MP3_FILE_WILDCARD),
 	OUTPUT_PCM_44100: (EXTENSION_PCM, PCM_FILE_WILDCARD),
 	OUTPUT_ULAW_8000: (EXTENSION_ULAW, ULAW_FILE_WILDCARD),
+	OUTPUT_WAV_48000: (EXTENSION_WAV, WAV_FILE_WILDCARD),
 }
 DEFAULT_OUTPUT_FILE_OPTION = (EXTENSION_BIN, BIN_FILE_WILDCARD)
 AUDIO_FILE_EXTENSIONS = (
@@ -678,6 +690,8 @@ API_KW_OUTPUT_FORMAT = "output_format"
 API_KW_FILE = "file"
 API_KW_AUDIO = "audio"
 API_KW_DURATION_SECONDS = "duration_seconds"
+API_KW_PROMPT_INFLUENCE = "prompt_influence"
+API_KW_LOOP = "loop"
 API_KW_PROMPT = "prompt"
 API_KW_TEXT_DESCRIPTION = "text"
 API_KW_VOICE_DESCRIPTION = "voice_description"
@@ -778,14 +792,15 @@ SLIDER_MAXIMUM = 100
 SLIDER_DEFAULT_STABILITY = 50
 SLIDER_DEFAULT_SIMILARITY = 75
 SLIDER_DEFAULT_STYLE = 0
+SLIDER_DEFAULT_PROMPT_INFLUENCE = 30
 SLIDER_SPEED_MINIMUM = 70
 SLIDER_SPEED_MAXIMUM = 120
 SLIDER_SPEED_DEFAULT = 100
 SLIDER_SPEED_DIVISOR = 100.0
 PERCENT_DIVISOR = 100.0
+DURATION_AUTO = 0.0
 DURATION_MINIMUM = 0.5
-DURATION_MAXIMUM = 22.0
-DURATION_DEFAULT = 5.0
+DURATION_MAXIMUM = 30.0
 DURATION_INCREMENT = 0.5
 SPIN_DIGITS = 1
 PROGRESS_RANGE = 100
@@ -814,6 +829,12 @@ DIALOGUE_MAX_VOICES = 10
 # The API documents 2,000 characters as the reliable limit for one dialogue request.
 DIALOGUE_MAX_CHARACTERS = 2000
 SFX_MODEL_ID = "eleven_text_to_sound_v3"
+# The website makes four sounds per click.
+SFX_VARIATIONS_MINIMUM = 1
+SFX_VARIATIONS_MAXIMUM = 4
+SFX_VARIATIONS_DEFAULT = 4
+# The API limits concurrent requests by plan, so variations are sent two at a time.
+SFX_MAX_CONCURRENT_REQUESTS = 2
 MUSIC_MODEL_V2_5 = "music_v2_5"
 MUSIC_MODEL_V1 = "music_v1"
 MUSIC_MODELS = (
@@ -857,6 +878,7 @@ MONO_CHANNEL_COUNT = 1
 FORMAT_MP3 = "mp3"
 FORMAT_WAV = "wav"
 OUTPUT_MP3_PREFIX = "mp3_"
+OUTPUT_WAV_PREFIX = "wav_"
 PLAYBACK_POLL_SECONDS = 0.05
 ULAW_BYTE_MASK = 255
 ULAW_SIGN_BIT = 128
