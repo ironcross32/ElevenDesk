@@ -416,6 +416,7 @@ def generate_sound_effect(prompt, duration_seconds):
 		{
 			constants.API_KW_TEXT: prompt,
 			constants.API_KW_DURATION_SECONDS: duration_seconds,
+			constants.API_KW_MODEL_ID: constants.SFX_MODEL_ID,
 		},
 	)
 	return _join_audio_chunks(response)

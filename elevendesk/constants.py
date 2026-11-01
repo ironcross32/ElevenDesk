@@ -813,6 +813,7 @@ VOICE_NAME_DESCRIPTION_SEPARATOR = " - "
 DIALOGUE_MAX_VOICES = 10
 # The API documents 2,000 characters as the reliable limit for one dialogue request.
 DIALOGUE_MAX_CHARACTERS = 2000
+SFX_MODEL_ID = "eleven_text_to_sound_v3"
 MUSIC_MODEL_V2_5 = "music_v2_5"
 MUSIC_MODEL_V1 = "music_v1"
 MUSIC_MODELS = (
